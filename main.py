@@ -46,18 +46,25 @@ async def comand_mode(message: Message) -> None:
     
 
 def step_by_step_response(query):
-    if mode:
-        url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
 
+    url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
+    soup = BeautifulSoup(requests.get(url).content, "xml")
+    subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
+    
+    if mode:
         try:
-            soup = BeautifulSoup(requests.get(url).content, "xml")
-            subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
             img_tag = subpod.find("img")
             return img_tag.get("src") if img_tag else False
         except:
             return False
     else:
-        pass
+                try:
+            plain_tag = subpod.find('plaintext')
+            return plain_tag.get_text('\n', strip=True).replace('Answer: | \n |', '\nAnswer:\n') if plain_tag else False
+        except:
+            return False
+
+
 
 
 @dp.message()
@@ -71,6 +78,7 @@ async def wolfram(message: types.Message) -> None:
     if mode:
         spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
 
+        
         if spok_resp == 'Wolfram Alpha did not understand your input':
             await message.answer('Wolfram|Alpha did not understand your input')
             spok_resp = simp_resp = step_resp = False
@@ -78,6 +86,7 @@ async def wolfram(message: types.Message) -> None:
             simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
             step_resp = step_by_step_response(query)
 
+        
         print(f'{Fore.GREEN}{message.text}{Style.RESET_ALL}: {spok_resp} {simp_resp} {step_resp}')
         if step_resp:
             photo1 = InputMediaPhoto(media=simp_resp)
@@ -96,12 +105,26 @@ async def wolfram(message: types.Message) -> None:
             except:
                 await message.answer(text=f'{spok_resp}\nThe image is too large to send, so if you want to see it, '
                     f'go to https://www.wolframalpha.com/input?i={query}', disable_web_page_preview=True)
-                
+
+
+    else:
+        llm_resp = requests.get(f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api}').text
+        if 'Wolfram|Alpha could not understand: ' in llm_resp:
+            await message.answer(llm_resp)
+        else:
+            llm_resp = llm_resp[llm_resp.find('Input:'):llm_resp.rfind('Wolfram|Alpha website result for "')]
+            step_resp = step_by_step_response(query)
+            await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
+
+        print(f'{Fore.GREEN}{message.text}{Style.RESET_ALL}: '
+              f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} '
+              f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution')
+
+
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
     print(f'A reply to the {Fore.GREEN}{message.text}{Style.RESET_ALL} was sent to '
-              f'{Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S")}')
-    else:
-        pass
+          f'{Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S")}')
+
 
 
 if __name__ == '__main__':
