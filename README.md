@@ -1,2 +1,1 @@
-# wolfram_telegram_bot
-This bot uses WolframAlpha to answer queries. In the future it will give theory on math's and python
+This telegram bot uses the [WolframAlpha API](https://products.wolframalpha.com/api/faqs) to answer queries. I will add a maths and python reference book in the future. Works on aiogram
