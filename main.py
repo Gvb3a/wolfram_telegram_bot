@@ -1,11 +1,11 @@
 import asyncio
 import requests
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import InputMediaPhoto, Message
+from aiogram.types import InputMediaPhoto, Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from datetime import datetime
 from urllib.parse import quote  # is used to replace spaces and other special characters with their encoded values
-from bs4 import BeautifulSoup
 from bs4 import BeautifulSoup
 from colorama import Fore, Style
 
@@ -63,6 +63,75 @@ def step_by_step_response(query):
             return plain_tag.get_text('\n', strip=True).replace('Answer: | \n |', '\nAnswer:\n') if plain_tag else False
         except:
             return False
+
+
+
+
+inline_geometry_1 = InlineKeyboardButton(
+    text='Geometry',
+    callback_data='geometry'
+)
+inline_algebra_1 = InlineKeyboardButton(
+    text='Algebra',
+    callback_data='algebra'
+)
+inline_python_1 = InlineKeyboardButton(
+    text='Python',
+    callback_data='python'
+)
+inline_close_1 = InlineKeyboardButton(
+    text='Close',
+    callback_data='close'
+)
+keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[[inline_geometry_1],
+                     [inline_algebra_1],
+                     [inline_python_1],
+                     [inline_close_1]]
+)
+
+
+inline_geometry_triangleArea_2 = InlineKeyboardButton(
+    text='Triangle area',
+    callback_data='geometry>triangleArea'
+)
+inline_geometry_back_2 = InlineKeyboardButton(
+    text='Back',
+    callback_data='geometry>back'
+)
+keyboard_geometry = InlineKeyboardMarkup(
+    inline_keyboard=[[inline_geometry_triangleArea_2],
+                     [inline_geometry_back_2]]
+)
+
+@dp.message(Command('theory'))
+async def theory_command(message: Message):
+    await message.answer(
+        text='theory',
+        reply_markup=keyboard
+)
+
+
+@dp.callback_query(F.data == 'close')
+async def process_button_close_press(callback: CallbackQuery):
+    await callback.message.edit_text(
+    text='close',
+    reply_markup=None)
+    await callback.answer()
+
+@dp.callback_query(F.data == 'geometry')
+async def process_button_geometry_press(callback: CallbackQuery):
+    await callback.message.edit_text(
+        text='theory>geometry',
+        reply_markup=keyboard_geometry)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == 'geometry>triangleArea')
+async def process_button_geometry_press(callback: CallbackQuery):
+    await callback.message.answer_photo(photo='https://i.ibb.co/c2SPNFF/triangle-Area.png', caption='triangle area')
+    await callback.message.edit_text(text='theory>geometry', reply_markup=keyboard_geometry)
+    await callback.answer()
 
 
 
