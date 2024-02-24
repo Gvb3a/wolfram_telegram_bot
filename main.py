@@ -3,24 +3,31 @@ import requests
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import InputMediaPhoto, Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from aiogram.types import InputMediaPhoto, Message, CallbackQuery
 from datetime import datetime
 from urllib.parse import quote  # is used to replace spaces and other special characters with their encoded values
 from bs4 import BeautifulSoup
 from colorama import Fore, Style
 
 from config import *
-
+from inline import keyboard, keyboard_geometry
 
 bot = Bot(bot_token)
 dp = Dispatcher()
 
 
 @dp.message(CommandStart())
-async def command_start_handler(message: Message) -> None:
+async def command_start(message: Message) -> None:
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    print(f'{Fore.RED}/start{Style.RESET_ALL} comand from {Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} '
+    print(f'{Fore.RED}/start comand from {Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} '
           f'at {datetime.now().strftime("%H:%M:%S")}')
+
+
+
+@dp.message(Command('theory'))  # user selection processing at the very end of the file
+async def theory_command(message: Message):
+    await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
+
 
 
 @dp.message(Command('help'))
@@ -30,27 +37,28 @@ async def command_help(message: Message) -> None:
           f'at {datetime.now().strftime("%H:%M:%S")}')
 
 
-mode = True
 
+mode = True
 @dp.message(Command('mode'))
-async def comand_mode(message: Message) -> None:
+async def command_mode(message: Message) -> None:
     global mode
     mode = not mode
 
     if mode:
-        await message.answer(text='Mode changed to text')
-    else:
         await message.answer(text='Mode changed to pictures')
+    else:
+        await message.answer(text='Mode changed to text')
     print(f'User {Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} changed the mode to '
           f'{Fore.RED}{mode}{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S")}')
-    
+
+
 
 def step_by_step_response(query):
 
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
     soup = BeautifulSoup(requests.get(url).content, "xml")
     subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
-    
+
     if mode:
         try:
             img_tag = subpod.find("img")
@@ -58,96 +66,23 @@ def step_by_step_response(query):
         except:
             return False
     else:
-                try:
+        try:
             plain_tag = subpod.find('plaintext')
             return plain_tag.get_text('\n', strip=True).replace('Answer: | \n |', '\nAnswer:\n') if plain_tag else False
         except:
             return False
 
 
-
-
-inline_geometry_1 = InlineKeyboardButton(
-    text='Geometry',
-    callback_data='geometry'
-)
-inline_algebra_1 = InlineKeyboardButton(
-    text='Algebra',
-    callback_data='algebra'
-)
-inline_python_1 = InlineKeyboardButton(
-    text='Python',
-    callback_data='python'
-)
-inline_close_1 = InlineKeyboardButton(
-    text='Close',
-    callback_data='close'
-)
-keyboard = InlineKeyboardMarkup(
-    inline_keyboard=[[inline_geometry_1],
-                     [inline_algebra_1],
-                     [inline_python_1],
-                     [inline_close_1]]
-)
-
-
-inline_geometry_triangleArea_2 = InlineKeyboardButton(
-    text='Triangle area',
-    callback_data='geometry>triangleArea'
-)
-inline_geometry_back_2 = InlineKeyboardButton(
-    text='Back',
-    callback_data='geometry>back'
-)
-keyboard_geometry = InlineKeyboardMarkup(
-    inline_keyboard=[[inline_geometry_triangleArea_2],
-                     [inline_geometry_back_2]]
-)
-
-@dp.message(Command('theory'))
-async def theory_command(message: Message):
-    await message.answer(
-        text='theory',
-        reply_markup=keyboard
-)
-
-
-@dp.callback_query(F.data == 'close')
-async def process_button_close_press(callback: CallbackQuery):
-    await callback.message.edit_text(
-    text='close',
-    reply_markup=None)
-    await callback.answer()
-
-@dp.callback_query(F.data == 'geometry')
-async def process_button_geometry_press(callback: CallbackQuery):
-    await callback.message.edit_text(
-        text='theory>geometry',
-        reply_markup=keyboard_geometry)
-    await callback.answer()
-
-
-@dp.callback_query(F.data == 'geometry>triangleArea')
-async def process_button_geometry_press(callback: CallbackQuery):
-    await callback.message.answer_photo(photo='https://i.ibb.co/c2SPNFF/triangle-Area.png', caption='triangle area')
-    await callback.message.edit_text(text='theory>geometry', reply_markup=keyboard_geometry)
-    await callback.answer()
-
-
-
-
 @dp.message()
 async def wolfram(message: types.Message) -> None:
     await message.answer('Calculate...')
     print(f'Request {Fore.GREEN}{message.text}{Style.RESET_ALL} from '
-          f'{Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S")}')
+          f'{Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} with {mode} at {datetime.now().strftime("%H:%M:%S")}')
     query = quote(message.text)
-
 
     if mode:
         spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
 
-        
         if spok_resp == 'Wolfram Alpha did not understand your input':
             await message.answer('Wolfram|Alpha did not understand your input')
             spok_resp = simp_resp = step_resp = False
@@ -155,7 +90,6 @@ async def wolfram(message: types.Message) -> None:
             simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
             step_resp = step_by_step_response(query)
 
-        
         print(f'{Fore.GREEN}{message.text}{Style.RESET_ALL}: {spok_resp} {simp_resp} {step_resp}')
         if step_resp:
             photo1 = InputMediaPhoto(media=simp_resp)
@@ -196,12 +130,47 @@ async def wolfram(message: types.Message) -> None:
 
 
 
-if __name__ == '__main__':
 
+
+@dp.callback_query(F.data == 'theory>geometry')  # triangleArea, back
+async def theory_geometry(callback: CallbackQuery):
+    await callback.message.edit_text(text='theory>geometry', reply_markup=keyboard_geometry)
+    await callback.answer()
+
+@dp.callback_query(F.data == 'theory>geometry>triangleArea')
+async def theory_geometry_trianglearea(callback: CallbackQuery):
+    await callback.message.answer_photo(photo='https://i.ibb.co/c2SPNFF/triangle-Area.png', caption='Triangle Area')
+    await callback.answer()
+
+@dp.callback_query(F.data == 'theory>geometry>back')
+async def theory_geometry_back(callback: CallbackQuery):
+    await callback.message.edit_text(text='theory', reply_markup=keyboard)
+    await callback.answer()
+
+
+
+@dp.callback_query(F.data == 'theory>algebra')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.answer(text='In development', show_alert=True)
+
+
+
+@dp.callback_query(F.data == 'theory>python')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.answer(text='In development', show_alert=True)
+
+
+
+@dp.callback_query(F.data == 'theory>close')
+async def inline_close(callback: CallbackQuery):
+    await callback.message.edit_text(text='close', reply_markup=None)
+    await callback.answer()
+
+
+if __name__ == '__main__':
     print(f'The bot {Fore.RED}launches{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S %d.%m.%Y")}')
 
     async def main():
         await dp.start_polling(bot)
-
 
     asyncio.run(main())
