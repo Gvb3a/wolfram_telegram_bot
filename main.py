@@ -7,35 +7,34 @@ from aiogram.types import InputMediaPhoto, Message, CallbackQuery
 from datetime import datetime
 from urllib.parse import quote  # is used to replace spaces and other special characters with their encoded values
 from bs4 import BeautifulSoup
-from colorama import Fore, Style
+from colorama import Fore, Style, init
 
 from config import *
 from inline import keyboard, keyboard_geometry
 
+from streamlit_site import streamlit_command, streamlit_launch, streamlit_message_input, streamlit_message_output
+
 bot = Bot(bot_token)
 dp = Dispatcher()
+init()
 
 
 @dp.message(CommandStart())
 async def command_start(message: Message) -> None:
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    print(f'{Fore.RED}/start comand from {Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} '
-          f'at {datetime.now().strftime("%H:%M:%S")}')
-
-
-
-@dp.message(Command('theory'))  # user selection processing at the very end of the file
-async def theory_command(message: Message):
-    await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
-
+    streamlit_command('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 @dp.message(Command('help'))
 async def command_help(message: Message) -> None:
     await message.answer('help message(in development)')
-    print(f'{Fore.RED}/help{Style.RESET_ALL} comand from {Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} '
-          f'at {datetime.now().strftime("%H:%M:%S")}')
+    streamlit_command('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
+
+@dp.message(Command('theory'))  # user selection processing at the very end of the file
+async def theory_command(message: Message):
+    await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
+    streamlit_command('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 mode = True
@@ -48,8 +47,8 @@ async def command_mode(message: Message) -> None:
         await message.answer(text='Mode changed to pictures')
     else:
         await message.answer(text='Mode changed to text')
-    print(f'User {Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} changed the mode to '
-          f'{Fore.RED}{mode}{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S")}')
+
+    streamlit_command(f'/mode({mode})', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 
@@ -76,8 +75,7 @@ def step_by_step_response(query):
 @dp.message()
 async def wolfram(message: types.Message) -> None:
     await message.answer('Calculate...')
-    print(f'Request {Fore.GREEN}{message.text}{Style.RESET_ALL} from '
-          f'{Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} with {mode} at {datetime.now().strftime("%H:%M:%S")}')
+    streamlit_message_input(message.text, message.from_user.full_name, mode, datetime.now().strftime("%H:%M:%S"))
     query = quote(message.text)
 
     if mode:
@@ -123,10 +121,9 @@ async def wolfram(message: types.Message) -> None:
               f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} '
               f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution')
 
-
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
-    print(f'A reply to the {Fore.GREEN}{message.text}{Style.RESET_ALL} was sent to '
-          f'{Fore.BLUE}{message.from_user.full_name}{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S")}')
+
+    streamlit_message_output(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 
@@ -168,7 +165,7 @@ async def inline_close(callback: CallbackQuery):
 
 
 if __name__ == '__main__':
-    print(f'The bot {Fore.RED}launches{Style.RESET_ALL} at {datetime.now().strftime("%H:%M:%S %d.%m.%Y")}')
+    streamlit_launch(datetime.now().strftime("%H:%M:%S %d.%m.%Y"))
 
     async def main():
         await dp.start_polling(bot)
