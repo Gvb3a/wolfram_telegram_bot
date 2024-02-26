@@ -11,8 +11,8 @@ from colorama import Fore, Style, init
 
 from config import *
 from inline import keyboard, keyboard_geometry
-
-from streamlit_site import streamlit_command, streamlit_launch, streamlit_message_input, streamlit_message_output
+from database import sql_create, sql_launch, sql_command
+from streamlit_site import streamlit_message_input, streamlit_message_output
 
 bot = Bot(bot_token)
 dp = Dispatcher()
@@ -22,19 +22,21 @@ init()
 @dp.message(CommandStart())
 async def command_start(message: Message) -> None:
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    streamlit_command('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    print(message.from_user.id)
+    sql_command('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+
 
 
 @dp.message(Command('help'))
 async def command_help(message: Message) -> None:
     await message.answer('help message(in development)')
-    streamlit_command('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 @dp.message(Command('theory'))  # user selection processing at the very end of the file
 async def theory_command(message: Message):
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
-    streamlit_command('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 mode = True
@@ -48,7 +50,7 @@ async def command_mode(message: Message) -> None:
     else:
         await message.answer(text='Mode changed to text')
 
-    streamlit_command(f'/mode({mode})', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command(f'/mode({mode})', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
 
 
 
@@ -165,7 +167,8 @@ async def inline_close(callback: CallbackQuery):
 
 
 if __name__ == '__main__':
-    streamlit_launch(datetime.now().strftime("%H:%M:%S %d.%m.%Y"))
+    sql_create()
+    sql_launch(datetime.now().strftime("%H:%M:%S %d.%m.%Y"))
 
     async def main():
         await dp.start_polling(bot)
