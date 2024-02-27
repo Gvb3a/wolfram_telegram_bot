@@ -11,8 +11,7 @@ from colorama import Fore, Style, init
 
 from config import *
 from inline import keyboard, keyboard_geometry
-from database import sql_create, sql_launch, sql_command
-from streamlit_site import streamlit_message_input, streamlit_message_output
+from database import sql_create, sql_launch, sql_command, sql_message
 
 bot = Bot(bot_token)
 dp = Dispatcher()
@@ -22,21 +21,20 @@ init()
 @dp.message(CommandStart())
 async def command_start(message: Message) -> None:
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    print(message.from_user.id)
-    sql_command('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
 
 
 
 @dp.message(Command('help'))
 async def command_help(message: Message) -> None:
     await message.answer('help message(in development)')
-    sql_command('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
 
 
 @dp.message(Command('theory'))  # user selection processing at the very end of the file
 async def theory_command(message: Message):
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
-    sql_command('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
 
 
 mode = True
@@ -50,7 +48,7 @@ async def command_mode(message: Message) -> None:
     else:
         await message.answer(text='Mode changed to text')
 
-    sql_command(f'/mode({mode})', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_command(f'/mode({mode})', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
 
 
 
@@ -77,7 +75,7 @@ def step_by_step_response(query):
 @dp.message()
 async def wolfram(message: types.Message) -> None:
     await message.answer('Calculate...')
-    streamlit_message_input(message.text, message.from_user.full_name, mode, datetime.now().strftime("%H:%M:%S"))
+    sql_message(message.text, message.from_user.full_name, mode, datetime.now().strftime("%H:%M:%S"), 'Request', 'None')
     query = quote(message.text)
 
     if mode:
@@ -90,7 +88,8 @@ async def wolfram(message: types.Message) -> None:
             simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
             step_resp = step_by_step_response(query)
 
-        print(f'{Fore.GREEN}{message.text}{Style.RESET_ALL}: {spok_resp} {simp_resp} {step_resp}')
+        add = f'{spok_resp} {simp_resp} {step_resp}'
+
         if step_resp:
             photo1 = InputMediaPhoto(media=simp_resp)
             photo2 = InputMediaPhoto(media=step_resp)
@@ -119,13 +118,11 @@ async def wolfram(message: types.Message) -> None:
             step_resp = step_by_step_response(query)
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
 
-        print(f'{Fore.GREEN}{message.text}{Style.RESET_ALL}: '
-              f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} '
-              f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution')
+        add = f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
 
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
 
-    streamlit_message_output(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S"))
+    sql_message(message.text, message.from_user.full_name, mode, datetime.now().strftime("%H:%M:%S"), 'Answer to', add)
 
 
 
