@@ -5,17 +5,16 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery
 from datetime import datetime
+# from aiogram.client.session.aiohttp import AiohttpSession
 from urllib.parse import quote  # is used to replace spaces and other special characters with their encoded values
 from bs4 import BeautifulSoup
-from colorama import Fore, Style, init
 
 from config import *
 from inline import keyboard, keyboard_geometry
 from database import sql_create, sql_launch, sql_command, sql_message
-
-bot = Bot(bot_token)
+# session = AiohttpSession(proxy="http://proxy.server:3128")
+bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
 dp = Dispatcher()
-init()
 
 
 @dp.message(CommandStart())
