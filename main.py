@@ -4,14 +4,14 @@ import requests
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery
-from datetime import datetime
 # from aiogram.client.session.aiohttp import AiohttpSession
+from datetime import datetime
 from urllib.parse import quote  # is used to replace spaces and other special characters with their encoded values
 from bs4 import BeautifulSoup
 
 from config import *
 from inline import keyboard, keyboard_geometry
-from database import sql_create, sql_launch, sql_command, sql_message
+from database import sql_create, sql_launch, sql_message, sql_mode
 # session = AiohttpSession(proxy="http://proxy.server:3128")
 bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
 dp = Dispatcher()
@@ -20,38 +20,36 @@ dp = Dispatcher()
 @dp.message(CommandStart())
 async def command_start(message: Message) -> None:
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    sql_command('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
+    sql_message('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
+
 
 
 
 @dp.message(Command('help'))
 async def command_help(message: Message) -> None:
     await message.answer('help message(in development)')
-    sql_command('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
+    sql_message('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
 
 
 @dp.message(Command('theory'))  # user selection processing at the very end of the file
 async def theory_command(message: Message):
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
-    sql_command('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
+    sql_message('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
 
 
-mode = True
 @dp.message(Command('mode'))
 async def command_mode(message: Message) -> None:
-    global mode
-    mode = not mode
-
-    if mode:
+    mode = sql_mode(message.from_user.id)
+    if not(mode):
         await message.answer(text='Mode changed to pictures')
     else:
         await message.answer(text='Mode changed to text')
 
-    sql_command(f'/mode({mode})', message.from_user.full_name, datetime.now().strftime("%H:%M:%S"), message.from_user.id)
+    sql_message(f'/mode', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
 
 
 
-def step_by_step_response(query):
+def step_by_step_response(query, mode):
 
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
     soup = BeautifulSoup(requests.get(url).content, "xml")
@@ -73,10 +71,11 @@ def step_by_step_response(query):
 
 @dp.message()
 async def wolfram(message: types.Message) -> None:
-    await message.answer('Calculate...')
-    sql_message(message.text, message.from_user.full_name, mode, datetime.now().strftime("%H:%M:%S"), 'Request', 'None')
-    query = quote(message.text)
+    await message.answer('Computing...')
 
+    mode = sql_mode(message.from_user.id)
+    sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Request({mode})')
+    query = quote(message.text)
     if mode:
         spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
 
@@ -85,7 +84,7 @@ async def wolfram(message: types.Message) -> None:
             spok_resp = simp_resp = step_resp = False
         else:
             simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
-            step_resp = step_by_step_response(query)
+            step_resp = step_by_step_response(query, mode)
 
         add = f'{spok_resp} {simp_resp} {step_resp}'
 
@@ -114,14 +113,14 @@ async def wolfram(message: types.Message) -> None:
             await message.answer(llm_resp)
         else:
             llm_resp = llm_resp[llm_resp.find('Input:'):llm_resp.rfind('Wolfram|Alpha website result for "')]
-            step_resp = step_by_step_response(query)
+            step_resp = step_by_step_response(query, mode)
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
 
         add = f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
 
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
 
-    sql_message(message.text, message.from_user.full_name, mode, datetime.now().strftime("%H:%M:%S"), 'Answer to', add)
+    sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Answer({mode}). {add}')
 
 
 
