@@ -6,41 +6,44 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery
 # from aiogram.client.session.aiohttp import AiohttpSession
 from datetime import datetime
-from urllib.parse import quote  # is used to replace spaces and other special characters with their encoded values
+from urllib.parse import quote
 from bs4 import BeautifulSoup
 
 from config import *
 from inline import keyboard, keyboard_geometry
 from database import sql_create, sql_launch, sql_message, sql_mode
+# the code in the comments is intended for online hosting
 # session = AiohttpSession(proxy="http://proxy.server:3128")
 bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
 dp = Dispatcher()
 
 
-@dp.message(CommandStart())
-async def command_start(message: Message) -> None:
+@dp.message(CommandStart())  # processing of the start command
+async def command_start(message: Message) -> None:  # Sending a welcome message with the user's name
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
     sql_message('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
+    # calls the sql_message function from the database.py file where the interaction with the database takes place
 
 
 
-
-@dp.message(Command('help'))
+@dp.message(Command('help'))  # processing of the help command
 async def command_help(message: Message) -> None:
-    await message.answer('help message(in development)')
+    await message.answer('help message(in development)')  # It just sends a help message
     sql_message('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
 
 
-@dp.message(Command('theory'))  # user selection processing at the very end of the file
+
+@dp.message(Command('theory'))  # calls the inline keyboard to select a theory
 async def theory_command(message: Message):
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
     sql_message('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
 
 
-@dp.message(Command('mode'))
+
+@dp.message(Command('mode'))  # changes the mode from pictures to text or vice versa
 async def command_mode(message: Message) -> None:
-    mode = sql_mode(message.from_user.id)
-    if not(mode):
+    mode = not(sql_mode(message.from_user.id))  # The mode change only happens in sql_message, and sql_mode recognizes the value. So we take the inverse value of mode
+    if mode:
         await message.answer(text='Mode changed to pictures')
     else:
         await message.answer(text='Mode changed to text')
@@ -49,79 +52,84 @@ async def command_mode(message: Message) -> None:
 
 
 
-def step_by_step_response(query, mode):
 
+@dp.message()
+async def wolfram(message: types.Message) -> None:
+    await message.answer('Computing...')  # a temporary message that will be deleted
+    k = 1  # We'll delete it by index(number of messages)
+    mode = sql_mode(message.from_user.id)  # recognize the mode
+    sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Request({mode})')
+    # enter a query into the database
+    query = quote(message.text)  # replace spaces and other special characters with their encoded values
+
+    # for a step-by-step solution. It used to be a separate function, but I decided to make it like this
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
     soup = BeautifulSoup(requests.get(url).content, "xml")
     subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
 
-    if mode:
-        try:
-            img_tag = subpod.find("img")
-            return img_tag.get("src") if img_tag else False
-        except:
-            return False
-    else:
-        try:
-            plain_tag = subpod.find('plaintext')
-            return plain_tag.get_text('\n', strip=True).replace('Answer: | \n |', '\nAnswer:\n') if plain_tag else False
-        except:
-            return False
-
-
-@dp.message()
-async def wolfram(message: types.Message) -> None:
-    await message.answer('Computing...')
-
-    mode = sql_mode(message.from_user.id)
-    sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Request({mode})')
-    query = quote(message.text)
-    if mode:
+    if mode:  # If picture mode
         spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
-
+        # Just get the text from the site
         if spok_resp == 'Wolfram Alpha did not understand your input':
-            await message.answer('Wolfram|Alpha did not understand your input')
             spok_resp = simp_resp = step_resp = False
         else:
-            simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
-            step_resp = step_by_step_response(query, mode)
+            simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'  # image link
+            try:  # step-by-step solution
+                img_tag = subpod.find("img")
+                step_resp = img_tag.get("src") if img_tag else False
+            except:
+                step_resp = False
 
-        add = f'{spok_resp} {simp_resp} {step_resp}'
+        add = f'{spok_resp} {simp_resp} {step_resp}'  # Being a creator, it's a shame not to have access to the answer
 
-        if step_resp:
+        if step_resp:  # If a step-by-step solution is in place
             photo1 = InputMediaPhoto(media=simp_resp)
             photo2 = InputMediaPhoto(media=step_resp)
 
-            if spok_resp != 'No spoken result available':
+            if spok_resp != 'No spoken result available':  # adding a description if available
                 photo1.caption = spok_resp
 
             await message.answer_media_group(media=[photo1, photo2])
         elif spok_resp:
+            spok_resp = '' if spok_resp == 'No spoken result available' else spok_resp + '\n'
+
             try:
-                if spok_resp != 'No spoken result available':
-                    await message.answer_photo(photo=simp_resp, caption=spok_resp)
-                else:
-                    await message.answer_photo(photo=simp_resp)
-            except:
-                await message.answer(text=f'{spok_resp}\nThe image is too large to send, so if you want to see it, '
+                await message.answer_photo(photo=simp_resp, caption=spok_resp)
+
+            except:  # There are some files that telegram can't send and gives an error
+                await message.answer(text=f'{spok_resp}The image is too large to send, so if you want to see it, '
                     f'go to https://www.wolframalpha.com/input?i={query}', disable_web_page_preview=True)
+        else:
+            await message.answer('Wolfram|Alpha did not understand your input')
 
 
     else:
         llm_resp = requests.get(f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api}').text
+        try:
+            plain_tag = subpod.find('plaintext')
+            step_resp = plain_tag.get_text('\n', strip=True).replace('Answer: | \n |',
+                                            '\nAnswer:\n') if plain_tag else False
+        except:
+            step_resp = False
         if 'Wolfram|Alpha could not understand: ' in llm_resp:
             await message.answer(llm_resp)
-        else:
+        elif step_resp:
             llm_resp = llm_resp[llm_resp.find('Input:'):llm_resp.rfind('Wolfram|Alpha website result for "')]
-            step_resp = step_by_step_response(query, mode)
+            try:
+                plain_tag = subpod.find('plaintext')
+                step_resp = plain_tag.get_text('\n', strip=True).replace('Answer: | \n |',
+                                                '\nAnswer:\n') if plain_tag else False
+            except:
+                step_resp = False
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
+        else:
+            await message.answer(llm_resp)
 
         add = f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
 
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + k)
 
     sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Answer({mode}). {add}')
-
 
 
 
