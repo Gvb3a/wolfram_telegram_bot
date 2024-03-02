@@ -41,7 +41,12 @@ async def theory_command(message: Message):
 
 @dp.message(Command('mode'))  # changes the mode from pictures to text or vice versa
 async def command_mode(message: Message) -> None:
-    mode = not(sql_mode(message.from_user.id))  # The mode change only happens in sql_message, and sql_mode recognizes the value. So we take the inverse value of mode
+
+    try:
+        mode = not(sql_mode(message.from_user.id))  # The mode change only happens in sql_message, and sql_mode recognizes the value. So we take the inverse value of mode
+    except:
+        mode = False
+
     if mode:
         await message.answer(text='Mode changed to pictures')
     else:
@@ -77,8 +82,8 @@ async def wolfram(message: types.Message) -> None:
                 step_resp = img_tag.get("src") if img_tag else False
             except:
                 step_resp = False
-
-        add = f'{spok_resp} {simp_resp} {step_resp}'  # Being a creator, it's a shame not to have access to the answer
+        # Being a creator, it's a shame not to have access to the answer
+        add = f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query} {simp_resp} {step_resp}'
 
         if step_resp:  # If a step-by-step solution is in place
             photo1 = InputMediaPhoto(media=simp_resp)
@@ -121,7 +126,7 @@ async def wolfram(message: types.Message) -> None:
                 step_resp = False
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
         else:
-            while len(llm_resp)>4096:
+            while len(llm_resp) > 4096:
                 await message.answer(llm_resp[:4096])
                 llm_resp = llm_resp[4096:]
             await message.answer(llm_resp)
