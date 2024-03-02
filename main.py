@@ -24,12 +24,10 @@ async def command_start(message: Message) -> None:  # Sending a welcome message 
     # calls the sql_message function from the database.py file where the interaction with the database takes place
 
 
-
 @dp.message(Command('help'))  # processing of the help command
 async def command_help(message: Message) -> None:
     await message.answer(help_message)  # It just sends a help message
     sql_message('/help', message.from_user.full_name, message.from_user.id, 'Command')
-
 
 
 @dp.message(Command('theory'))  # calls the inline keyboard to select a theory
@@ -38,15 +36,10 @@ async def theory_command(message: Message):
     sql_message('/theory', message.from_user.full_name, message.from_user.id, 'Command')
 
 
-
 @dp.message(Command('mode'))  # changes the mode from pictures to text or vice versa
 async def command_mode(message: Message) -> None:
-
-    try:
-        mode = not(sql_mode(message.from_user.id))  # The mode change only happens in sql_message, and sql_mode recognizes the value. So we take the inverse value of mode
-    except:
-        mode = False
-
+    mode = not(sql_mode(message.from_user.full_name, message.from_user.id))
+    # The mode change only happens in sql_message, and sql_mode recognizes the value. So we take the inverse value of mode
     if mode:
         await message.answer(text='Mode changed to pictures')
     else:
@@ -60,11 +53,9 @@ async def command_mode(message: Message) -> None:
 @dp.message()
 async def wolfram(message: types.Message) -> None:
     await message.answer('Computing...')  # a temporary message that will be deleted
-    mode = sql_mode(message.from_user.id)  # recognize the mode
-    sql_message(message.text, message.from_user.full_name, message.from_user.id, f'Request({mode})')
-    # enter a query into the database
+    mode = sql_mode(message.from_user.full_name, message.from_user.id)  # recognize the mode
+    print(f'Request {message.text}({message})  from {message.from_user.full_name}')
     query = quote(message.text)  # replace spaces and other special characters with their encoded values
-
     # for a step-by-step solution. It used to be a separate function, but I decided to make it like this
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
     soup = BeautifulSoup(requests.get(url).content, "xml")
@@ -82,8 +73,8 @@ async def wolfram(message: types.Message) -> None:
                 step_resp = img_tag.get("src") if img_tag else False
             except:
                 step_resp = False
-        # Being a creator, it's a shame not to have access to the answer
-        add = f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query} {simp_resp} {step_resp}'
+
+        add = f'{spok_resp} {simp_resp} {step_resp}'  # Being a creator, it's a shame not to have access to the answer
 
         if step_resp:  # If a step-by-step solution is in place
             photo1 = InputMediaPhoto(media=simp_resp)
@@ -135,7 +126,7 @@ async def wolfram(message: types.Message) -> None:
 
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
 
-    sql_message(message.text, message.from_user.full_name, message.from_user.id, f'Answer({mode}). {add}')
+    sql_message(message.text, message.from_user.full_name, message.from_user.id, f'{bool(mode)}: {add}')
 
 
 
