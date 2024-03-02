@@ -55,12 +55,12 @@ def sql_message(message, name, user_id, add):
         cursor.execute(f"INSERT INTO user(name, id, mode) VALUES ('{name}', {user_id}, 1)")
         add += '(new user)'
 
-    if message == '/mode':
+    if message == '/mode' and len(message) == 5:
         if row[2]:
             cursor.execute(f"UPDATE user SET mode = 0 WHERE id = {user_id}")
         else:
             cursor.execute(f"UPDATE user SET mode = 1 WHERE id = {user_id}")
-        message += f'({not(row[2])}'
+        message += f'({not(row[2])})'
 
     current_time = datetime.now().strftime("%H:%M:%S %d.%m.%Y")
 
@@ -74,7 +74,7 @@ def sql_message(message, name, user_id, add):
     connection.close()
 
 
-def sql_mode(user_id):  # function for recognizing the current mode
+def sql_mode(user_name, user_id):  # function for recognizing the current mode
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
 
@@ -82,7 +82,9 @@ def sql_mode(user_id):  # function for recognizing the current mode
     row = cursor.fetchone()
 
     if row is None:
-        cursor.execute(f"INSERT INTO user(id, mode) VALUES ({user_id}, 1)")
+        cursor.execute(f"INSERT INTO user(name, id, mode) VALUES ('{user_name}', {user_id}, 1)")
         connection.commit()
-    connection.close()
-    return row[2]
+        return 1
+    else:
+        connection.close()
+        return row[2]
