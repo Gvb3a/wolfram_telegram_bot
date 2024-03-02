@@ -9,7 +9,7 @@ from urllib.parse import quote
 from bs4 import BeautifulSoup
 
 from config import *
-from inline import keyboard, keyboard_geometry
+from inline import keyboard, keyboard_geometry, help_message
 from database import sql_launch, sql_message, sql_mode
 # the code in the comments is intended for online hosting(I recommend pythonanywhere)
 # session = AiohttpSession(proxy="http://proxy.server:3128")
@@ -27,7 +27,7 @@ async def command_start(message: Message) -> None:  # Sending a welcome message 
 
 @dp.message(Command('help'))  # processing of the help command
 async def command_help(message: Message) -> None:
-    await message.answer('help message(in development)')  # It just sends a help message
+    await message.answer(help_message)  # It just sends a help message
     sql_message('/help', message.from_user.full_name, message.from_user.id, 'Command')
 
 
@@ -55,7 +55,6 @@ async def command_mode(message: Message) -> None:
 @dp.message()
 async def wolfram(message: types.Message) -> None:
     await message.answer('Computing...')  # a temporary message that will be deleted
-    k = 1  # We'll delete it by index(number of messages)
     mode = sql_mode(message.from_user.id)  # recognize the mode
     sql_message(message.text, message.from_user.full_name, message.from_user.id, f'Request({mode})')
     # enter a query into the database
@@ -122,11 +121,14 @@ async def wolfram(message: types.Message) -> None:
                 step_resp = False
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
         else:
+            while len(llm_resp)>4096:
+                await message.answer(llm_resp[:4096])
+                llm_resp = llm_resp[4096:]
             await message.answer(llm_resp)
 
         add = f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
 
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + k)
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
 
     sql_message(message.text, message.from_user.full_name, message.from_user.id, f'Answer({mode}). {add}')
 
@@ -175,4 +177,3 @@ if __name__ == '__main__':
         await dp.start_polling(bot)
 
     asyncio.run(main())
-    
