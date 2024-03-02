@@ -5,14 +5,13 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery
 # from aiogram.client.session.aiohttp import AiohttpSession
-from datetime import datetime
 from urllib.parse import quote
 from bs4 import BeautifulSoup
 
 from config import *
 from inline import keyboard, keyboard_geometry
-from database import sql_create, sql_launch, sql_message, sql_mode
-# the code in the comments is intended for online hosting
+from database import sql_launch, sql_message, sql_mode
+# the code in the comments is intended for online hosting(I recommend pythonanywhere)
 # session = AiohttpSession(proxy="http://proxy.server:3128")
 bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
 dp = Dispatcher()
@@ -21,7 +20,7 @@ dp = Dispatcher()
 @dp.message(CommandStart())  # processing of the start command
 async def command_start(message: Message) -> None:  # Sending a welcome message with the user's name
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    sql_message('/start', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
+    sql_message('/start', message.from_user.full_name, message.from_user.id, 'Command')
     # calls the sql_message function from the database.py file where the interaction with the database takes place
 
 
@@ -29,14 +28,14 @@ async def command_start(message: Message) -> None:  # Sending a welcome message 
 @dp.message(Command('help'))  # processing of the help command
 async def command_help(message: Message) -> None:
     await message.answer('help message(in development)')  # It just sends a help message
-    sql_message('/help', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
+    sql_message('/help', message.from_user.full_name, message.from_user.id, 'Command')
 
 
 
 @dp.message(Command('theory'))  # calls the inline keyboard to select a theory
 async def theory_command(message: Message):
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
-    sql_message('/theory', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
+    sql_message('/theory', message.from_user.full_name, message.from_user.id, 'Command')
 
 
 
@@ -48,7 +47,7 @@ async def command_mode(message: Message) -> None:
     else:
         await message.answer(text='Mode changed to text')
 
-    sql_message(f'/mode', message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, 'Command')
+    sql_message(f'/mode', message.from_user.full_name, message.from_user.id, 'Command')
 
 
 
@@ -58,7 +57,7 @@ async def wolfram(message: types.Message) -> None:
     await message.answer('Computing...')  # a temporary message that will be deleted
     k = 1  # We'll delete it by index(number of messages)
     mode = sql_mode(message.from_user.id)  # recognize the mode
-    sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Request({mode})')
+    sql_message(message.text, message.from_user.full_name, message.from_user.id, f'Request({mode})')
     # enter a query into the database
     query = quote(message.text)  # replace spaces and other special characters with their encoded values
 
@@ -129,7 +128,7 @@ async def wolfram(message: types.Message) -> None:
 
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + k)
 
-    sql_message(message.text, message.from_user.full_name, datetime.now().strftime("%H:%M:%S %d.%m.%Y"), message.from_user.id, f'Answer({mode}). {add}')
+    sql_message(message.text, message.from_user.full_name, message.from_user.id, f'Answer({mode}). {add}')
 
 
 
@@ -170,10 +169,10 @@ async def inline_close(callback: CallbackQuery):
 
 
 if __name__ == '__main__':
-    sql_create()
-    sql_launch(datetime.now().strftime("%H:%M:%S %d.%m.%Y"))
+    sql_launch()
 
     async def main():
         await dp.start_polling(bot)
 
     asyncio.run(main())
+    
