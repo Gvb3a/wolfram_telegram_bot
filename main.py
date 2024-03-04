@@ -9,7 +9,7 @@ from urllib.parse import quote
 from bs4 import BeautifulSoup
 
 from config import *
-from inline import keyboard, keyboard_geometry, help_message
+from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from database import sql_launch, sql_message, sql_mode
 # the code in the comments is intended for online hosting(I recommend pythonanywhere)
 # session = AiohttpSession(proxy="http://proxy.server:3128")
@@ -26,8 +26,30 @@ async def command_start(message: Message) -> None:  # Sending a welcome message 
 
 @dp.message(Command('help'))  # processing of the help command
 async def command_help(message: Message) -> None:
-    await message.answer(help_message)  # It just sends a help message
+    await message.answer(text=help_message, reply_markup=help_keyboard)
     sql_message('/help', message.from_user.full_name, message.from_user.id, 'Command')
+
+@dp.callback_query(F.data == 'help>Mathematics')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.message.edit_text(text=math_example, reply_markup=inline_help_back)
+    await callback.answer()
+
+@dp.callback_query(F.data == 'help>ScienceTechnology')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.answer(text='In development', show_alert=True)
+
+@dp.callback_query(F.data == 'help>SocietyCulture')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.answer(text='In development', show_alert=True)
+
+@dp.callback_query(F.data == 'help>EverydayLife')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.answer(text='In development', show_alert=True)
+
+@dp.callback_query(F.data == 'help>back')
+async def theory_geometry(callback: CallbackQuery):
+    await callback.message.edit_text(text=help_message, reply_markup=help_keyboard)
+    await callback.answer()
 
 
 @dp.message(Command('theory'))  # calls the inline keyboard to select a theory
@@ -54,7 +76,7 @@ async def command_mode(message: Message) -> None:
 async def wolfram(message: types.Message) -> None:
     await message.answer('Computing...')  # a temporary message that will be deleted
     mode = sql_mode(message.from_user.full_name, message.from_user.id)  # recognize the mode
-    print(f'Request {message.text}({message})  from {message.from_user.full_name}')
+    print(f'Request {message.text}({mode}) from {message.from_user.full_name}')
     query = quote(message.text)  # replace spaces and other special characters with their encoded values
     # for a step-by-step solution. It used to be a separate function, but I decided to make it like this
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
