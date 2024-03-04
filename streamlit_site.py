@@ -1,14 +1,36 @@
 import streamlit as st
-from colorama import Fore, Style, init
-init()
+import sqlite3
+from streamlit_option_menu import option_menu
 
+db_path = 'D:/PycharmProjects/WolframBot/database.db'
 
-def streamlit_message_input(text, name, mode, time):
-    st.write(f'Request :green[{text}] from :blue[{name}] with {mode} at {time}')
-    print(f'Request {Fore.GREEN}{text}{Style.RESET_ALL} from {Fore.BLUE}{name}{Style.RESET_ALL} with {mode} at {time}')
+connection = sqlite3.connect(db_path)
+cursor = connection.cursor()
 
+def main():
+    selected = option_menu(
+        menu_title=None,
+        options=["Message", "User", "Console"],
+        icons=["chat-left", "person-circle", "code-slash"],
+        default_index=2,
+        orientation="horizontal",
+    )
 
-def streamlit_message_output(text, name, time):
-    st.write(f'A reply to the :green[{text}] was sent to :blue[{name}] at {time}')
-    print(f'A reply to the {Fore.GREEN}{text}{Style.RESET_ALL} was sent to '
-          f'{Fore.BLUE}{name}{Style.RESET_ALL} at {time}')
+    if selected == "Message":
+        cursor.execute("SELECT * FROM message")
+        rows = cursor.fetchall()
+        st.table(rows)
+
+    if selected == "User":
+        cursor.execute("SELECT * FROM user")
+        rows = cursor.fetchall()
+        st.dataframe(rows)
+
+    if selected == "Console":
+        cursor.execute("SELECT * FROM console")
+        rows = cursor.fetchall()
+        st.dataframe(rows)
+
+    connection.close()
+
+main()
