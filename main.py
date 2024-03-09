@@ -3,7 +3,7 @@ import requests
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import InputMediaPhoto, Message, CallbackQuery
+from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile
 # from aiogram.client.session.aiohttp import AiohttpSession
 from urllib.parse import quote
 from bs4 import BeautifulSoup
@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from database import sql_launch, sql_message, sql_mode
+from random_walk import random_walk_main
 # the code in the comments is intended for online hosting(I recommend pythonanywhere)
 # session = AiohttpSession(proxy="http://proxy.server:3128")
 bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
@@ -31,7 +32,7 @@ async def command_help(message: Message) -> None:
 
 @dp.callback_query(F.data == 'help>Mathematics')
 async def theory_geometry(callback: CallbackQuery):
-    await callback.message.edit_text(text=math_example, reply_markup=inline_help_back)
+    await callback.message.edit_text(text=math_example, reply_markup=inline_help_back, disable_web_page_preview=True)
     await callback.answer()
 
 @dp.callback_query(F.data == 'help>ScienceTechnology')
@@ -70,7 +71,13 @@ async def command_mode(message: Message) -> None:
     sql_message(f'/mode', message.from_user.full_name, message.from_user.id, 'Command')
 
 
-
+@dp.message(Command('random_walk'))
+async def command_mode(message: Message) -> None:
+    await message.answer('Computing...')
+    random_walk_main(str(message.text).lower()[11:], message.message_id)
+    cat = FSInputFile(f'{message.message_id}.png')
+    await message.answer_photo(photo=cat)
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
 
 @dp.message()
 async def wolfram(message: types.Message) -> None:
