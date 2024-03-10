@@ -17,70 +17,55 @@ def random_walk_main(query, id):
     start_pos = int(start_pos_match.group(1)) if start_pos_match else 0
 
     final_pos_match = re.search(r'final\s*pos\s*(\d+)', query)
-    final_pos = int(final_pos_match.group(1)) if final_pos_match else 0
+    final_pos = int(final_pos_match.group(1)) if final_pos_match else False
 
     intersection_match = re.search(r'intersection\s*(\d+)', query)
-    intersection = int(intersection_match.group(1)) if intersection_match else False
+    intersection = int(intersection_match.group(1)) if intersection_match else 1
+    if increment == 0: intersection = 1
 
     number_of_graphics_match = re.search(r'num\s*(\d+)', query)
-    number_of_graphics = int(number_of_graphics_match.group(1)) if number_of_graphics_match else random.randint(1, 5)
+    number_of_graphics = int(number_of_graphics_match.group(1)) if number_of_graphics_match else random.randint(1, 10)
 
-    if dimension == 1:
-        line = []
-        len_line = []
-        for i in range(number_of_graphics):
-            x, len_x = one_dimension(start_pos, final_pos, steps, increment, intersection)
-            plt.plot(x)
-            len_line.append(len_x)
-            print(f'{i+1}/{number_of_graphics}')
-        line_value = 0 if type(final_pos) == int else final_pos
-        for _ in range(max(len_line)):
-            line.append(line_value)
-        plt.plot(line, color='k')
-        plt.savefig(f"{id}.png")
+    limit_for_1 = steps <= 10**16 and abs(start_pos-final_pos)%increment == 0 and number_of_graphics <= 1000 and intersection <= 100 and max(abs(final_pos), abs(start_pos)) <= 10**4
+    if dimension == 1 and limit_for_1:
+        len_line = [one_dimension(start_pos, final_pos, steps, increment, intersection) for _ in range(number_of_graphics)]
+        plt.plot([0 if type(final_pos) == int else final_pos]*max(len_line), color='k')
+        plt.xlabel('position')
+        plt.ylabel('step number')
 
     elif dimension == 2:
-        plt.scatter(0, 0, color='green')
-        for i in range(number_of_graphics):
-            x, y = two_dimensional(start_pos, final_pos, steps, increment, intersection)
-            plt.plot(x, y)
-            plt.scatter(x[-1], y[-1], color='r')
-            print(f'{i+1}/{number_of_graphics}')
-        plt.savefig(f"{id}.png")
+        [two_dimensional(start_pos, final_pos, steps, increment, intersection) for _ in range(number_of_graphics)]
+        plt.scatter(0, 0, color='green', zorder=10, s=30)
 
     elif dimension == 3:
         ax = plt.figure().add_subplot(projection='3d')
         ax.scatter(0, 0, 0, color='g')
-        for i in range(number_of_graphics):
-            x, y, z = three_dimensionality(start_pos, steps, increment)
-            ax.plot(x, y, z)
-            ax.scatter(x[-1], y[-1], z[-1], color='r')
-            print(f'{i + 1}/{number_of_graphics}')
-        plt.savefig(f"{id}.png")
+        [three_dimensionality(start_pos, steps, increment, ax) for _ in range(number_of_graphics)]
 
-    else:
-        print('Incorrect dimensioning')
+    plt.savefig(f"{id}.png")
+    plt.savefig(f'{id}.pdf')
 
     plt.clf()
 
 
 def one_dimension(start_pos, final_pos, steps, increment, intersection):
     x = [start_pos]
-    while steps > 0:
-        x.append(x[-1] + random.choice([-increment, increment]))
-        steps -= 1
+    [x.append(x[-1] + random.choice([-increment, increment])) for _ in range(steps)]
+
     if type(final_pos) == int:
         while intersection > 0:
             x.append(x[-1] + random.choice([-increment, increment]))
             if x[-1] == final_pos:
                 intersection -= 1
-    return x, len(x)
+
+    plt.plot(x)
+    return len(x)
 
 
 def two_dimensional(start_pos, final_pos, steps, increment, intersection):
     x = [start_pos]
     y = [start_pos]
-    while steps > 0:
+    for _ in range(steps):
         random_choice = random.choice([True, False])
         if random_choice:
             x.append(x[-1] + random.choice([-increment, increment]))
@@ -88,7 +73,6 @@ def two_dimensional(start_pos, final_pos, steps, increment, intersection):
         else:
             y.append(y[-1] + random.choice([-increment, increment]))
             x.append(x[-1])
-        steps -= 1
     if type(final_pos) == int:
         while intersection > 0:
             random_choice = random.choice([True, False])
@@ -100,10 +84,13 @@ def two_dimensional(start_pos, final_pos, steps, increment, intersection):
                 x.append(x[-1])
             if x[-1] == 0 and y[-1] == 0:
                 intersection -= 1
-    return x, y
+                print('return to origin')
+
+    plt.plot(x, y)
+    plt.scatter(x[-1], y[-1], color='r', s=20, zorder=5)
 
 
-def three_dimensionality(start_pos, steps, increment):
+def three_dimensionality(start_pos, steps, increment, ax):
     x = [start_pos]
     y = [start_pos]
     z = [start_pos]
@@ -122,6 +109,5 @@ def three_dimensionality(start_pos, steps, increment):
             y.append(y[-1])
             z.append(z[-1] + random.choice([-increment, increment]))
         steps -= 1
-    if z[-1] == y[-1] == z[-1] == 0:
-        print(1)
-    return x, y, z
+    ax.plot(x, y, z, linewidth=1)
+    ax.scatter(x[-1], y[-1], z[-1], color='r')
