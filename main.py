@@ -1,5 +1,6 @@
 import asyncio
 import requests
+import os
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
@@ -68,16 +69,19 @@ async def command_mode(message: Message) -> None:
     else:
         await message.answer(text='Mode changed to text')
 
-    sql_message(f'/mode', message.from_user.full_name, message.from_user.id, 'Command')
+    sql_message('/mode', message.from_user.full_name, message.from_user.id, 'Command')
 
 
 @dp.message(Command('random_walk'))
-async def command_mode(message: Message) -> None:
+async def command_random_walk(message: Message) -> None:
     await message.answer('Computing...')
-    random_walk_main(str(message.text).lower()[11:], message.message_id)
-    cat = FSInputFile(f'{message.message_id}.png')
-    await message.answer_photo(photo=cat)
+    random_walk_main(str(message.text).lower()[12:], message.message_id)
+    await message.answer_photo(photo=FSInputFile(f'{message.message_id}.png'))
+    await message.answer_document(document=FSInputFile(f'{message.message_id}.pdf'))
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
+    os.remove(f'{message.message_id}.png')
+    os.remove(f'{message.message_id}.pdf')
+    sql_message(f'/random_walk({str(message.text)[12:].strip()})', message.from_user.full_name, message.from_user.id, 'Command')
 
 @dp.message()
 async def wolfram(message: types.Message) -> None:
