@@ -36,18 +36,6 @@ async def theory_geometry(callback: CallbackQuery):
     await callback.message.edit_text(text=math_example, reply_markup=inline_help_back, disable_web_page_preview=True)
     await callback.answer()
 
-@dp.callback_query(F.data == 'help>ScienceTechnology')
-async def theory_geometry(callback: CallbackQuery):
-    await callback.answer(text='In development', show_alert=True)
-
-@dp.callback_query(F.data == 'help>SocietyCulture')
-async def theory_geometry(callback: CallbackQuery):
-    await callback.answer(text='In development', show_alert=True)
-
-@dp.callback_query(F.data == 'help>EverydayLife')
-async def theory_geometry(callback: CallbackQuery):
-    await callback.answer(text='In development', show_alert=True)
-
 @dp.callback_query(F.data == 'help>back')
 async def theory_geometry(callback: CallbackQuery):
     await callback.message.edit_text(text=help_message, reply_markup=help_keyboard)
@@ -76,12 +64,13 @@ async def command_mode(message: Message) -> None:
 async def command_random_walk(message: Message) -> None:
     await message.answer('Computing...')
     random_walk_main(str(message.text).lower()[12:], message.message_id)
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
     await message.answer_photo(photo=FSInputFile(f'{message.message_id}.png'))
     await message.answer_document(document=FSInputFile(f'{message.message_id}.pdf'))
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
     os.remove(f'{message.message_id}.png')
     os.remove(f'{message.message_id}.pdf')
     sql_message(f'/random_walk({str(message.text)[12:].strip()})', message.from_user.full_name, message.from_user.id, 'Command')
+
 
 @dp.message()
 async def wolfram(message: types.Message) -> None:
