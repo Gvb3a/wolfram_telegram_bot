@@ -111,3 +111,7 @@ def three_dimensionality(start_pos, steps, increment, ax):
         steps -= 1
     ax.plot(x, y, z, linewidth=1)
     ax.scatter(x[-1], y[-1], z[-1], color='r')
+
+
+if __name__ == '__main__':
+    random_walk_main(input('Enter a query: '), 1)
