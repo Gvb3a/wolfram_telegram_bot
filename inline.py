@@ -57,7 +57,7 @@ math_example = ('Mathematics\n'
 
 inline_help_ScienceTechnology = InlineKeyboardButton(
     text='Example: Science & Technology',
-    callback_data='help>ScienceTechnology'
+    url='https://www.wolframalpha.com/examples/science-and-technology'
 )
 Science_example = ("Wolfram|Alpha has extensive knowledge related to science and technology. Using the computational "
                    "power behind Wolfram|Alpha, solve problems involving physics, chemistry, engineering, "
@@ -78,11 +78,11 @@ Science_example = ("Wolfram|Alpha has extensive knowledge related to science and
                    "")
 inline_help_SocietyCulture = InlineKeyboardButton(
     text='Example: Society & Culture',
-    callback_data='help>SocietyCulture'
+    url='https://www.wolframalpha.com/examples/society-and-culture'
 )
 inline_help_EverydayLife = InlineKeyboardButton(
     text='Example: Everyday Life',
-    callback_data='help>EverydayLife'
+    url='https://www.wolframalpha.com/examples/everyday-life'
 )
 help_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[[inline_help_Mathematics],
