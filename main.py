@@ -10,7 +10,6 @@ from os import remove  # delete a file
 from urllib.parse import quote  # string encoding into URL
 from bs4 import BeautifulSoup
 
-
 from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from database import sql_launch, sql_message, sql_mode
@@ -24,8 +23,9 @@ dp = Dispatcher()
 
 @dp.message(CommandStart())  # processing of the start command
 async def command_start(message: Message) -> None:  # Sending a welcome message with the user's name
-    await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    sql_message('/start', message.from_user.full_name, message.from_user.id, 'Command')
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    await message.answer(text=f"Hello, {name}! Enter what you want to calculate or know about")
+    sql_message('/start', name, message.from_user.id, 'Command')
     # calls the sql_message function from the database.py file where the interaction with the database takes place
 
 
@@ -55,7 +55,7 @@ async def command_mode(message: Message) -> None:
 @dp.message(Command('random_walk'))  # Random walk simulation
 async def command_random_walk(message: Message) -> None:  # sends png and pdf with simulation results
     await message.answer('Computing...')  # sends a message that work is in progress
-    random_walk_main(str(message.text).lower()[12:], message.message_id)  # calls a function that creates png and pdf
+    await random_walk_main(str(message.text).lower()[12:], message.message_id)  # calls a function that creates png and pdf
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)  # delete 'Computing...'
     await message.answer_photo(photo=FSInputFile(f'{message.message_id}.png'))  # sends png
     await message.answer_document(document=FSInputFile(f'{message.message_id}.pdf'))  # sends pdf
@@ -69,7 +69,6 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
 async def wolfram(message: types.Message) -> None:
     await message.answer('Computing...')  # a temporary message that will be deleted
     mode = sql_mode(message.from_user.full_name, message.from_user.id)  # recognize the mode
-    print(f'Request {message.text}({mode}) from {message.from_user.full_name}')  # output the information to the console
     # so that if some error occurs and the request is not entered into the database, we can find out about it.
     query = quote(message.text)  # replace spaces and other special characters with their encoded values
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
@@ -88,8 +87,6 @@ async def wolfram(message: types.Message) -> None:
                 step_resp = img_tag.get("src") if img_tag else False
             except:
                 step_resp = False
-
-        add = f'{spok_resp} {simp_resp} {step_resp}'  # Being a creator, it's a shame not to have access to the answer
 
         if step_resp:  # If a step-by-step solution is in place
             photo1 = InputMediaPhoto(media=simp_resp)
@@ -131,12 +128,10 @@ async def wolfram(message: types.Message) -> None:
                 llm_resp = llm_resp[4096:]
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
 
-        add = (f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api} '
-               f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution')
-
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
-
-    sql_message(message.text, message.from_user.full_name, message.from_user.id, f'{bool(mode)}: {add}')
+    add = 'Pictures. ' if mode else 'Text. '
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    sql_message(message.text, name, message.from_user.id, add)
 
 
 @dp.callback_query(F.data == 'help>Mathematics')
