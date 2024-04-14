@@ -17,13 +17,6 @@ def sql_launch():
         additionally TEXT
         )
         ''')
-    # You could say that this is a record of what is output to the console (for the site)
-    cursor.execute(''' 
-        CREATE TABLE IF NOT EXISTS console (
-        text TEXT,
-        launch_or_not INT
-        )
-        ''')
     # User information (name, ID and mode) is stored here.
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user (
@@ -36,7 +29,6 @@ def sql_launch():
     current_time = datetime.now().strftime("%H:%M:%S %d.%m.%Y")
     print(f'The bot launches at {current_time}')
     # print(f"The bot {Fore.RED}launches{Style.RESET_ALL} at {current_time}")
-    cursor.execute(f"INSERT INTO console(text, launch_or_not) VALUES ('The bot :red[launches] at {current_time}', 1)")
 
     connection.commit()  # Save the changes to the database
     connection.close()  # close the database
@@ -48,6 +40,7 @@ def sql_message(message, name, user_id, add):
 
     cursor.execute(f"SELECT * FROM user WHERE id = {user_id}")
     row = cursor.fetchone()
+
     if row is not None and row[0] is not None:
         if not (name in row[0]):
             cursor.execute(f"UPDATE user SET name = '{row[0]}, {name}' WHERE id = {user_id}")
@@ -68,8 +61,6 @@ def sql_message(message, name, user_id, add):
     # print(f'{Fore.RED}{message}{Style.RESET_ALL} from {Fore.BLUE}{name}({user_id}){Style.RESET_ALL} at {current_time}. {add}')
     cursor.execute(
         f"INSERT INTO message(message, username, time, id, additionally) VALUES ('{message}', '{name}', '{current_time}', {user_id}, '{add}')")
-    cursor.execute(
-        f"INSERT INTO console(text, launch_or_not) VALUES (':red[{message}] from :blue[{name}] at {current_time}. {add}', 0)")
 
     connection.commit()
     connection.close()
