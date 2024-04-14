@@ -3,7 +3,7 @@ import asyncio
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile
-# from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from requests import get  # retrieving data from the server (HTTP)
 from os import remove  # delete a file
@@ -23,7 +23,7 @@ dp = Dispatcher()
 
 @dp.message(CommandStart())  # processing of the start command
 async def command_start(message: Message) -> None:  # Sending a welcome message with the user's name
-    name = f'{message.from_user.full_name}({message.from_user.username})'
+    name = f'{message.from_user.full_name}'
     await message.answer(text=f"Hello, {name}! Enter what you want to calculate or know about")
     sql_message('/start', name, message.from_user.id, 'Command')
     # calls the sql_message function from the database.py file where the interaction with the database takes place
@@ -32,23 +32,26 @@ async def command_start(message: Message) -> None:  # Sending a welcome message 
 @dp.message(Command('help'))  # processing of the help command
 async def command_help(message: Message) -> None:  # sends a help message and invokes the inline keyboard
     await message.answer(text=help_message, reply_markup=help_keyboard)
-    sql_message('/help', message.from_user.full_name, message.from_user.id, 'Command')
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    sql_message('/help', name, message.from_user.id, 'Command')
     # the code that handles inline keyboard interaction is at the very end
 
 
 @dp.message(Command('theory'))  # calls the inline keyboard to select a theory
 async def theory_command(message: Message) -> None:  # sends an inline keyboard message to select a theory
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
-    sql_message('/theory', message.from_user.full_name, message.from_user.id, 'Command')
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    sql_message('/theory', name, message.from_user.id, 'Command')
 
 
 @dp.message(Command('mode'))  # changes the mode from pictures to text or vice versa
 async def command_mode(message: Message) -> None:
-    if not sql_mode(message.from_user.full_name, message.from_user.id):
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    if not sql_mode(name, message.from_user.id):
         await message.answer(text='Mode changed to pictures')
     else:
         await message.answer(text='Mode changed to text')
-    sql_message('/mode', message.from_user.full_name, message.from_user.id, 'Command')
+    sql_message('/mode', name, message.from_user.id, 'Command')
     # sql_mode recognises the current mode. And the mode change happens in sql_message. So we take the opposite value
 
 
@@ -61,14 +64,16 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
     await message.answer_document(document=FSInputFile(f'{message.message_id}.pdf'))  # sends pdf
     remove(f'{message.message_id}.png')  # deletes png
     remove(f'{message.message_id}.pdf')  # deletes pdf
-    sql_message(f'/random_walk({str(message.text)[12:].strip()})', message.from_user.full_name, message.from_user.id,
-                'Command')
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    name = f'{name}({message.from_user.username})'
+    sql_message(f'/random_walk({str(message.text)[12:].strip()})', name, message.from_user.id, 'Command')
 
 
 @dp.message()  # Message processing using WolframAlpha API
 async def wolfram(message: types.Message) -> None:
     await message.answer('Computing...')  # a temporary message that will be deleted
-    mode = sql_mode(message.from_user.full_name, message.from_user.id)  # recognize the mode
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    mode = sql_mode(name, message.from_user.id)  # recognize the mode
     # so that if some error occurs and the request is not entered into the database, we can find out about it.
     query = quote(message.text)  # replace spaces and other special characters with their encoded values
     url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
@@ -130,7 +135,6 @@ async def wolfram(message: types.Message) -> None:
 
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
     add = 'Pictures. ' if mode else 'Text. '
-    name = f'{message.from_user.full_name}({message.from_user.username})'
     sql_message(message.text, name, message.from_user.id, add)
 
 
