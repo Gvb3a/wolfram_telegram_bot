@@ -3,7 +3,7 @@ import random
 import re
 
 
-def random_walk_main(query, id):
+async def random_walk_main(query, id):
     dimension_match = re.search(r'(\d)\s*d', query)
     dimension = int(dimension_match.group(1)) if dimension_match else random.randint(1, 3)
 
