@@ -5,7 +5,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from requests import get  # retrieving data from the server (HTTP)
+from requests import get  # retrieving data from the server
 from os import remove  # delete a file
 from urllib.parse import quote  # string encoding into URL
 from bs4 import BeautifulSoup
@@ -21,27 +21,27 @@ bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
 dp = Dispatcher()
 
 
-@dp.message(CommandStart())  # processing of the start command
+@dp.message(CommandStart())  # /start
 async def command_start(message: Message) -> None:  # Sending a welcome message with the user's name
-    name = f'{message.from_user.full_name}'
-    await message.answer(text=f"Hello, {name}! Enter what you want to calculate or know about")
-    sql_message('/start', name, message.from_user.id, 'Command')
-    # calls the sql_message function from the database.py file where the interaction with the database takes place
+    name = f'{message.from_user.full_name}({message.from_user.username})'  # it'll go into the database
+    await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
+    sql_message('/start', name, message.from_user.id, 'Command')  # database
 
 
-@dp.message(Command('help'))  # processing of the help command
-async def command_help(message: Message) -> None:  # sends a help message and invokes the inline keyboard
-    await message.answer(text=help_message, reply_markup=help_keyboard)
+@dp.message(Command('help'))  # /help
+async def command_help(message: Message) -> None:  # sends a help message with an inline keyboard
+    await message.answer(text=help_message, reply_markup=help_keyboard, parse_mode='Markdown')  # text and keyboard are stored in variables
     name = f'{message.from_user.full_name}({message.from_user.username})'
     sql_message('/help', name, message.from_user.id, 'Command')
-    # the code that handles inline keyboard interaction is at the very end
 
 
-@dp.message(Command('theory'))  # calls the inline keyboard to select a theory
+"""
+@dp.message(Command('theory'))  #/theory
 async def theory_command(message: Message) -> None:  # sends an inline keyboard message to select a theory
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
     name = f'{message.from_user.full_name}({message.from_user.username})'
     sql_message('/theory', name, message.from_user.id, 'Command')
+"""
 
 
 @dp.message(Command('mode'))  # changes the mode from pictures to text or vice versa
@@ -65,8 +65,8 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
     remove(f'{message.message_id}.png')  # deletes png
     remove(f'{message.message_id}.pdf')  # deletes pdf
     name = f'{message.from_user.full_name}({message.from_user.username})'
-    name = f'{name}({message.from_user.username})'
     sql_message(f'/random_walk({str(message.text)[12:].strip()})', name, message.from_user.id, 'Command')
+    # str(message.text)[12:].strip() lets us know the text that the user has entered
 
 
 @dp.message()  # Message processing using WolframAlpha API
@@ -83,6 +83,7 @@ async def wolfram(message: types.Message) -> None:
         spok_resp = get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
         # Just get the text from the site
         if spok_resp == 'Wolfram Alpha did not understand your input':
+            # If spok_resp gives 'Wolfram Alpha did not understand...', there is no point in processing other responses
             spok_resp = simp_resp = step_resp = False
         else:
             simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'  # image link
@@ -150,6 +151,8 @@ async def theory_geometry(callback: CallbackQuery):
     await callback.answer()
 
 
+"""
+# I never had the energy to fully do the theory, so here goes.
 @dp.callback_query(F.data == 'theory>geometry')  # triangleArea, back
 async def theory_geometry(callback: CallbackQuery):
     await callback.message.edit_text(text='theory>geometry', reply_markup=keyboard_geometry)
@@ -182,7 +185,7 @@ async def theory_geometry(callback: CallbackQuery):
 async def inline_close(callback: CallbackQuery):
     await callback.message.edit_text(text='close', reply_markup=None)
     await callback.answer()
-
+"""
 
 if __name__ == '__main__':
     sql_launch()
