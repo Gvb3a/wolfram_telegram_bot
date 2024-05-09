@@ -1,11 +1,13 @@
 import asyncio
+import json
+import requests
+import re
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from requests import get  # retrieving data from the server
 from os import remove  # delete a file
 from urllib.parse import quote  # string encoding into URL
 from bs4 import BeautifulSoup
@@ -22,15 +24,17 @@ dp = Dispatcher()
 
 
 @dp.message(CommandStart())  # /start
-async def command_start(message: Message) -> None:  # Sending a welcome message with the user's name
-    name = f'{message.from_user.full_name}({message.from_user.username})'  # it'll go into the database
+async def command_start(message: Message) -> None:
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    # Sending a welcome message with the user's name
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
     sql_message('/start', name, message.from_user.id, 'Command')  # database
 
 
 @dp.message(Command('help'))  # /help
-async def command_help(message: Message) -> None:  # sends a help message with an inline keyboard
-    await message.answer(text=help_message, reply_markup=help_keyboard, parse_mode='Markdown')  # text and keyboard are stored in variables
+async def command_help(message: Message) -> None:
+    # sends a help message with an inline keyboard
+    await message.answer(text=help_message, reply_markup=help_keyboard, parse_mode='Markdown')
     name = f'{message.from_user.full_name}({message.from_user.username})'
     sql_message('/help', name, message.from_user.id, 'Command')
 
@@ -58,29 +62,72 @@ async def command_mode(message: Message) -> None:
 @dp.message(Command('random_walk'))  # Random walk simulation
 async def command_random_walk(message: Message) -> None:  # sends png and pdf with simulation results
     await message.answer('Computing...')  # sends a message that work is in progress
+    promt = str(message.text)[12:]
+    message_id = message.message_id + 1
     await random_walk_main(str(message.text).lower()[12:], message.message_id)  # calls a function that creates png and pdf
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)  # delete 'Computing...'
-    await message.answer_photo(photo=FSInputFile(f'{message.message_id}.png'))  # sends png
+    await bot.delete_message(chat_id=message.chat.id, message_id=message_id)  # delete 'Computing...'
+    await message.answer_photo(photo=FSInputFile(f'{message.message_id}.png'), caption=promt)  # sends png
     await message.answer_document(document=FSInputFile(f'{message.message_id}.pdf'))  # sends pdf
     remove(f'{message.message_id}.png')  # deletes png
     remove(f'{message.message_id}.pdf')  # deletes pdf
     name = f'{message.from_user.full_name}({message.from_user.username})'
-    sql_message(f'/random_walk({str(message.text)[12:].strip()})', name, message.from_user.id, 'Command')
-    # str(message.text)[12:].strip() lets us know the text that the user has entered
+    sql_message(f'/random_walk({promt.strip()})', name, message.from_user.id, 'Command')
 
 
-@dp.message()  # Message processing using WolframAlpha API
+
+@dp.message((F.text | F.photo))  # Message processing using WolframAlpha API
 async def wolfram(message: types.Message) -> None:
-    await message.answer('Computing...')  # a temporary message that will be deleted
     name = f'{message.from_user.full_name}({message.from_user.username})'
     mode = sql_mode(name, message.from_user.id)  # recognize the mode
-    # so that if some error occurs and the request is not entered into the database, we can find out about it.
-    query = quote(message.text)  # replace spaces and other special characters with their encoded values
-    url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
-    soup = BeautifulSoup(get(url).content, "xml")
+    add = 'Pictures. ' if mode else 'Text. '
 
-    if mode:  # If picture mode
-        spok_resp = get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
+    no_error = True
+    if message.photo:
+        await message.answer('Recognition...')
+        file_name = f'{message.message_id}.png'
+        await message.bot.download(file=message.photo[-1].file_id, destination=file_name)
+        header = {"token": simple_tex_api}
+        file = [("file", (file_name, open(file_name, 'rb')))]
+        response = requests.post('https://server.simpletex.net/api/latex_ocr', files=file, headers=header)
+        if response.status_code == 200:
+            data = json.loads(response.text)
+            latex = str(data['res']['latex'])
+            confidence = int(data['res']['conf'] * 100)
+            text = latex
+            add += f'Recognition({latex}, conf={confidence}).'
+            if int(confidence * 100) == 0:
+                await message.answer('Failed to recognise text')
+                no_error = False
+            else:
+                await message.answer(f'Data: `${latex}$`\nConfidence: {confidence}%', parse_mode='Markdown')
+        else:
+            no_error = False
+            text = 'Recognition error'
+            add += f'Recognition error({response.status_code}'
+            await message.answer(f'Error {response.status_code}. If the image is fine, please contact admin @gvb3a')
+
+        file_obj = file[0][1][1]
+        file_obj.close()
+        remove(file_name)
+        await bot.delete_message(chat_id=message.from_user.id, message_id=message.message_id+1)
+        a = 3
+
+
+    else:
+        text = message.text
+        a = 1
+
+    await message.answer('Computing...')
+    query = quote(text)  # replace spaces and other special characters with their encoded values
+
+      # a temporary message that will be deleted
+
+    # so that if some error occurs and the request is not entered into the database, we can find out about it.
+    url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
+    soup = BeautifulSoup(requests.get(url).content, "xml")
+
+    if mode and no_error:  # If picture mode
+        spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
         # Just get the text from the site
         if spok_resp == 'Wolfram Alpha did not understand your input':
             # If spok_resp gives 'Wolfram Alpha did not understand...', there is no point in processing other responses
@@ -115,8 +162,8 @@ async def wolfram(message: types.Message) -> None:
             await message.answer('Wolfram|Alpha did not understand your input')
 
 
-    else:
-        llm_resp = get(f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api}').text
+    elif no_error and mode:
+        llm_resp = requests.get(f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api}').text
         try:
             subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
             plain_tag = subpod.find('plaintext')
@@ -134,8 +181,7 @@ async def wolfram(message: types.Message) -> None:
                 llm_resp = llm_resp[4096:]
             await message.answer(f'{llm_resp}\nStep by step solution:\n{step_resp}' if step_resp else llm_resp)
 
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
-    add = 'Pictures. ' if mode else 'Text. '
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + a)
     sql_message(message.text, name, message.from_user.id, add)
 
 
@@ -152,7 +198,6 @@ async def theory_geometry(callback: CallbackQuery):
 
 
 """
-# I never had the energy to fully do the theory, so here goes.
 @dp.callback_query(F.data == 'theory>geometry')  # triangleArea, back
 async def theory_geometry(callback: CallbackQuery):
     await callback.message.edit_text(text='theory>geometry', reply_markup=keyboard_geometry)
