@@ -5,5 +5,7 @@ simple_api = 'SIMPLE_API'  # https://products.wolframalpha.com/simple-api/docume
 show_steps_api = 'SHOW_STEPS_API'  # https://products.wolframalpha.com/show-steps-api/documentation
 llm_api = 'LLM_API'  # https://products.wolframalpha.com/llm-api/documentation
 
+simple_tex_api = 'SIMPLE_TEX_API'  # https://simpletex.net/api
+
 # spoken_api = simple_api; show_steps_api = llm_api
 # https://developer.wolframalpha.com/
