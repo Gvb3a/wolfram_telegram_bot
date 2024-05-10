@@ -6,4 +6,11 @@ get bot_token from [BotFather](https://t.me/BotFather) ( there you create a bot)
 simple_tex_api is needed for recognising pictures. I used [SimpleTex](https://www.simpletex.net/), because [mathpix api](https://docs.mathpix.com/#introduction) is paid. Also pass registration, then [API](https://www.simpletex.net/api)>Go to API Dashboard>User Access Token>Create New Token
 All api are free
 
-To run the bot itself, download the necessary libraries and run main.py
+To run the bot itself, download the necessary libraries and run `main.py`
+
+## Todo
+- [ ] Code with api in README
+- [ ] Post (online hosting)
+- [ ] Text.md (help message)
+- [ ] Just improve the code and add comments
+- [ ] Start(help) message
