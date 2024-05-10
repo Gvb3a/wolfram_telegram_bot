@@ -14,3 +14,4 @@ To run the bot itself, download the necessary libraries and run `main.py`
 - [ ] Text.md (help message)
 - [ ] Just improve the code and add comments
 - [ ] Start(help) message
+- [ ] Site (maybe with streamlit)
