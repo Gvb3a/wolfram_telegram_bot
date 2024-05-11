@@ -9,9 +9,10 @@ All api are free
 To run the bot itself, download the necessary libraries and run `main.py`
 
 ## Todo
-- [ ] Code with api in README
+- [ ] Code examples with api
+- [ ] Database-based graphs
 - [ ] Post (online hosting)
 - [ ] Text.md (help message)
-- [ ] Just improve the code and add comments
 - [ ] Start(help) message
 - [ ] Site (maybe with streamlit)
+- [ ] Interface for admins (by id)
