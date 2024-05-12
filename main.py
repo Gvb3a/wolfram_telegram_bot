@@ -4,7 +4,7 @@ import requests
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile
+from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 # from aiogram.client.session.aiohttp import AiohttpSession
 
 from os import remove  # delete a file
@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
-from database import sql_launch, sql_message, sql_mode, sql_change_mode
+from database import sql_launch, sql_message, sql_mode, sql_change_mode, sql_statistic
 from random_walk import random_walk_main
 
 # the code in the comments is intended for online hosting (pythonanywhere)
@@ -27,7 +27,7 @@ async def command_start(message: Message) -> None:
     name = f'{message.from_user.full_name}({message.from_user.username})'
     # Sending a welcome message with the user's name
     await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
-    sql_message('/start', name, message.from_user.id, 'Command')  # database
+    sql_message('/start', name, message.from_user.id, 'Command. ')  # database
 
 
 @dp.message(Command('help'))  # /help
@@ -35,7 +35,7 @@ async def command_help(message: Message) -> None:
     # sends a help message with an inline keyboard
     await message.answer(text=help_message, reply_markup=help_keyboard, parse_mode='Markdown')
     name = f'{message.from_user.full_name}({message.from_user.username})'
-    sql_message('/help', name, message.from_user.id, 'Command')
+    sql_message('/help', name, message.from_user.id, 'Command. ')
 
 
 """
@@ -43,7 +43,7 @@ async def command_help(message: Message) -> None:
 async def theory_command(message: Message) -> None:  # sends an inline keyboard message to select a theory
     await message.answer(text='theory', reply_markup=keyboard)  # keyboard from config.py
     name = f'{message.from_user.full_name}({message.from_user.username})'
-    sql_message('/theory', name, message.from_user.id, 'Command')
+    sql_message('/theory', name, message.from_user.id, 'Command. ')
 """
 
 
@@ -56,7 +56,7 @@ async def command_mode(message: Message) -> None:
         await message.answer(text='Mode changed to pictures')
     else:
         await message.answer(text='Mode changed to text')
-    sql_message(f'/mode({mode})', name, id, 'Command')
+    sql_message(f'/mode({mode})', name, id, 'Command. ')
 
 
 @dp.message(Command('random_walk'))  # Random walk simulation
@@ -71,8 +71,26 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
     remove(f'{message.message_id}.png')  # deletes png
     remove(f'{message.message_id}.pdf')  # deletes pdf
     name = f'{message.from_user.full_name}({message.from_user.username})'
-    sql_message(f'/random_walk({promt.strip()})', name, message.from_user.id, 'Command')
+    sql_message(f'/random_walk({promt.strip()})', name, message.from_user.id, 'Command. ')
 
+
+
+@dp.message(Command('statistic'))
+async def command_statistic(message: Message) -> None:
+    name = f'{message.from_user.full_name}({message.from_user.username})'
+    user_id = message.from_user.id
+    message_id = message.message_id
+    sql_message('/statistic', name, user_id, 'Command. ')
+
+    if user_id in admin_id:
+        admin = True
+    else:
+        admin = False
+
+    sql_statistic(message_id, admin)
+
+    await message.answer_photo(photo=FSInputFile(f'{message_id}.png'), caption='Update - /statistic')
+    remove(f'{message_id}.png')
 
 
 @dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
