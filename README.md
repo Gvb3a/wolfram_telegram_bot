@@ -10,10 +10,10 @@ To run the bot itself, download the necessary libraries and run `main.py`
 
 ## Todo
 - [ ] Code examples with api
+- [ ] Help message
 - [x] Database-based graphs
 - [ ] Post (online hosting)
 - [ ] Text.md (help message)
-- [ ] Start(help) message
 - [ ] Site (maybe with streamlit)
 - [ ] The image is too large (image download)
 - [ ] random walk restrictions
