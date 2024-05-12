@@ -26,7 +26,10 @@ dp = Dispatcher()
 async def command_start(message: Message) -> None:
     name = f'{message.from_user.full_name}({message.from_user.username})'
     # Sending a welcome message with the user's name
-    await message.answer(text=f"Hello, {message.from_user.full_name}! Enter what you want to calculate or know about")
+    await message.answer(text=f"Hello, {message.from_user.full_name}! "
+                              f"This telegram bot allows you to use Wolfram Alpha "
+                              f"absolutely free with step-by-step solution and photo recognition. "
+                              f"Enter what you want to calculate or know or send a photo.")
     sql_message('/start', name, message.from_user.id, 'Command. ')  # database
 
 
