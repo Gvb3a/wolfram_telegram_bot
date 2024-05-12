@@ -2,7 +2,8 @@ import sqlite3  # library for working with the database
 # from colorama import init, Fore, Style  # library for colouring text in print
 from datetime import datetime  # library for recognising the current time
 # init()  # is used to colour text in the cmd
-
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def sql_launch():
@@ -100,3 +101,54 @@ def sql_check(name, user_id):
 
     connection.commit()
     connection.close()
+
+
+def sql_statistic(file_name, admin):
+    connection = sqlite3.connect('wolfram_database.db')
+    cursor = connection.cursor()
+
+    time = datetime.now().strftime('%m.%Y')
+
+    # I decided to process the information through SQL (rather than copying everything and writing algorithms myself) to get a better understanding of SQL.
+    recognition = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE '%Recognition%'").fetchall())
+    pictures = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE 'Pictures%'").fetchall())
+    text = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE 'Text%'").fetchall())
+    command = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE 'Command%'").fetchall())
+
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    wolfram = [pictures, text, 0, 0]
+    photo_recognition = [0, 0, recognition, 0]
+    command_list = [0, 0, 0, command]
+
+    labels = ['Command', 'Wolfram', 'Photo recognition']
+    legend = ['Pictures mode', 'Text mode', 'Recognition', 'Command']
+    data = [command_list, wolfram, photo_recognition]
+
+    # I don't know how it works.
+    data = np.array(data).T
+    positions = np.arange(len(labels)) + 1
+
+    # What's going on here
+    bottom = np.zeros(len(labels))
+    for i, values in enumerate(data):
+        ax.bar(positions, values, bottom=bottom, label=legend[i])
+        bottom += values
+
+    # -_-
+    ax.set_xticks(positions)
+    ax.set_xticklabels(labels)
+    ax.set_ylim(0, bottom.max() + 10)
+
+    ax.set_title('Total:' + str(recognition + pictures + text + command))
+    ax.legend()
+    plt.savefig(f'{file_name}.png')
+    plt.clf()
+
+    connection.close()
+
+
+if __name__ == '__main__':
+    sql_statistic(1, 1)
+    
