@@ -1,15 +1,18 @@
 import asyncio
 import json
 import requests
+import shutil
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, InputFile
 # from aiogram.client.session.aiohttp import AiohttpSession
 
 from os import remove  # delete a file
 from urllib.parse import quote  # string encoding into URL
 from bs4 import BeautifulSoup
+from deep_translator import GoogleTranslator
+import detectlanguage
 
 from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
@@ -20,6 +23,7 @@ from random_walk import random_walk_main
 # session = AiohttpSession(proxy="http://proxy.server:3128")
 bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
 dp = Dispatcher()
+detectlanguage.configuration.api_key = detect_language_api
 
 
 @dp.message(CommandStart())  # /start
@@ -29,6 +33,7 @@ async def command_start(message: Message) -> None:
     await message.answer(text=f"Hello, {message.from_user.full_name}! "
                               f"This telegram bot allows you to use Wolfram Alpha "
                               f"absolutely free with step-by-step solution and photo recognition. "
+                              f"There is also a translator and you can write in any language you like. "
                               f"Enter what you want to calculate or know or send a photo.")
     sql_message('/start', name, message.from_user.id, 'Command. ')  # database
 
@@ -96,6 +101,56 @@ async def command_statistic(message: Message) -> None:
     remove(f'{message_id}.png')
 
 
+def translate(text):
+    try:
+        detected_language = detectlanguage.simple_detect(text)
+        translated_text = GoogleTranslator(source=detected_language, target='en').translate(text)
+        return translated_text
+    except:
+        return text
+
+
+def recognition(file_name):
+    no_error = True
+    header = {"token": simple_tex_api}
+    file = [("file", (file_name, open(file_name, 'rb')))]
+    response = requests.post('https://server.simpletex.net/api/latex_ocr', files=file, headers=header)
+
+    if response.status_code == 200:
+        data = json.loads(response.text)
+        text = str(data['res']['latex'])
+        confidence = int(data['res']['conf'] * 100)
+        add = f'Recognition({text}, conf={confidence}).'
+
+        if int(confidence * 100) <= 3 or text == '[DOCIMG]':
+            message_text = 'Failed to recognise text'
+            no_error = False
+        else:
+            message_text = f'Data: `${text}$`\nConfidence: {confidence}%'
+    else:
+        no_error = False
+        text = 'Error'
+        add = f'Recognition error({response.status_code}'
+        message_text = f'Error {response.status_code}. If the image is fine, please contact admin @gvb3a'
+
+    file_obj = file[0][1][1]
+    file_obj.close()
+    remove(file_name)
+
+    return message_text, text, add, no_error
+
+
+def download_image(url, filename):
+    response = requests.get(url, stream=True)
+    if response.status_code == 200:
+        with open(filename, 'wb') as file:
+            response.raw.decode_content = True
+            shutil.copyfileobj(response.raw, file)
+        return True
+    else:
+        return False
+
+
 @dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
 async def wolfram(message: types.Message) -> None:
     name = f'{message.from_user.full_name}({message.from_user.username})'
@@ -104,33 +159,15 @@ async def wolfram(message: types.Message) -> None:
 
     no_error = True
     if message.photo:
+
         await message.answer('Recognition...')
         file_name = f'{message.message_id}.png'
         await message.bot.download(file=message.photo[-1].file_id, destination=file_name)  # download image
-        header = {"token": simple_tex_api}
-        file = [("file", (file_name, open(file_name, 'rb')))]
-        response = requests.post('https://server.simpletex.net/api/latex_ocr', files=file, headers=header)
 
-        if response.status_code == 200:
-            data = json.loads(response.text)
-            text = str(data['res']['latex'])
-            confidence = int(data['res']['conf'] * 100)
-            add += f'Recognition({text}, conf={confidence}).'
+        message_text, text, add_add, no_error = recognition(file_name)
+        add += add_add
 
-            if int(confidence * 100) <= 3:
-                await message.answer('Failed to recognise text')
-                no_error = False
-            else:
-                await message.answer(f'Data: `${text}$`\nConfidence: {confidence}%', parse_mode='Markdown')
-        else:
-            no_error = False
-            text = 'Error'
-            add += f'Recognition error({response.status_code}'
-            await message.answer(f'Error {response.status_code}. If the image is fine, please contact admin @gvb3a')
-
-        file_obj = file[0][1][1]
-        file_obj.close()
-        remove(file_name)
+        await message.answer(text=message_text, parse_mode='Markdown')
         await bot.delete_message(chat_id=message.from_user.id, message_id=message.message_id+1)
         a = 3  # this is necessary for successful deletion of the processing message at the end
 
@@ -140,20 +177,25 @@ async def wolfram(message: types.Message) -> None:
         a = 1
 
     await message.answer('Computing...')  # a temporary message that will be deleted
-    query = quote(text)  # replace spaces and other special characters with their encoded values
 
+    query = quote(translate(text))  # 'quote' replace spaces and other special characters with their encoded values
+    # translate() - function that translates the test (goes below)
 
     if mode and no_error:  # If picture mode
         spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
+        simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
+        simp_file_name = str(message.message_id) + 'simp.png'
+        step_file_name = str(message.message_id) + 'step.png'
 
         wf_understand = True
         if spok_resp == 'Wolfram Alpha did not understand your input':
             # If spok_resp gives 'Wolfram Alpha did not understand...', there is no point in processing other responses
-            spok_resp = simp_resp = step_resp = False
+            spok_resp = simp = step = False
             wf_understand = False
+            add += 'Did not understand'
 
         else:
-            simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'  # image link
+            simp = download_image(simp_resp, simp_file_name)
 
             try:  # step-by-step solution
                 url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
@@ -161,27 +203,29 @@ async def wolfram(message: types.Message) -> None:
                 subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
                 img_tag = subpod.find("img")
                 step_resp = img_tag.get("src") if img_tag else False
+                step = download_image(step_resp, step_file_name)
             except:
-                step_resp = False
+                step = False
 
         spok_resp = '' if spok_resp == 'No spoken result available' else spok_resp
-        photo_list = [InputMediaPhoto(media=simp_resp, caption=spok_resp)]
 
         try:
-            if step_resp:  # If a step-by-step solution is in place
-                photo_list.append(InputMediaPhoto(media=step_resp))
-                await message.answer_media_group(media=photo_list)
+            if step:  # If a step-by-step solution is in place
+                photo_list = [InputMediaPhoto(media=FSInputFile(simp_file_name), caption=spok_resp), InputMediaPhoto(media=FSInputFile(step_file_name))]
+                await bot.send_media_group(chat_id=message.chat.id, media=photo_list)
+                remove(simp_file_name)
+                remove(step_file_name)
 
-            elif wf_understand:
-                await message.answer_photo(photo=simp_resp[0])
+            elif wf_understand and simp:
+                await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp)
+                remove(simp_file_name)
 
             else:
                 await message.answer('Wolfram|Alpha did not understand your input')
 
         except:
-            await message.answer(text=f'{spok_resp}\nThe image is too large to send(or there\'s been an error), '
-                                      f'so if you want to see it, go to https://www.wolframalpha.com/input?i={query}',
-                                 disable_web_page_preview=True)
+            await message.answer(text=f'{spok_resp}\n'
+                                      f'Some kind of error. Maybe the image is too big or the admin messed something up')
 
 
     elif no_error:
