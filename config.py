@@ -9,4 +9,6 @@ llm_api = 'LLM_API'  # https://products.wolframalpha.com/llm-api/documentation
 
 simple_tex_api = 'SIMPLE_TEX_API'  # https://simpletex.net/api
 
+detect_language_api = 'DETECT_LANGUAGE_API'  # https://detectlanguage.com/
+
 admin_id = []  # your telegram id
