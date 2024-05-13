@@ -1,5 +1,5 @@
 # WolframAlpha telegram bot
-This telegram bot uses the [WolframAlpha API](https://products.wolframalpha.com/api/faqs) to answer queries. There is also image recognition with the help of a free analogue of Mathpix - [SimpleTex](https://www.simpletex.net/). Written in aiogram.
+This telegram bot uses the [WolframAlpha API](https://products.wolframalpha.com/api/faqs) to answer queries. There is also image recognition with the help of a free analogue of Mathpix - [SimpleTex](https://www.simpletex.net/).There is also a translator and you can write in any language. Written in aiogram.
 ## Usage
 All api changes take place in `config.py`. First get the WolframAlpha api. Go to [deloper portal](https://developer.wolframalpha.com/access), register and click on Get an App ID. You choose a name and description and select Simple API first, then Show Steps API (two will be enough). Then open `config.py` and assign spoken_api and simple_api value (token) to the received Simple API, and for show_steps_api and llm_api value to Show Steps API.
 get bot_token from [BotFather](https://t.me/BotFather) (there you create a bot).
@@ -15,5 +15,4 @@ To run the bot itself, download the necessary libraries and run `main.py`
 - [ ] Post (online hosting)
 - [ ] Text.md (help message)
 - [ ] Site (maybe with streamlit)
-- [ ] The image is too large (image download)
 - [ ] random walk restrictions
