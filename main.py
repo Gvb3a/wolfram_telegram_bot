@@ -6,7 +6,6 @@ import shutil
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, InputFile
-# from aiogram.client.session.aiohttp import AiohttpSession
 
 from os import remove  # delete a file
 from urllib.parse import quote  # string encoding into URL
@@ -19,9 +18,7 @@ from inline import keyboard, keyboard_geometry, help_message, help_keyboard, mat
 from database import sql_launch, sql_message, sql_mode, sql_change_mode, sql_statistic
 from random_walk import random_walk_main
 
-# the code in the comments is intended for online hosting (pythonanywhere)
-# session = AiohttpSession(proxy="http://proxy.server:3128")
-bot = Bot(bot_token)  # bot = Bot(bot_token, session=session)
+bot = Bot(bot_token)
 dp = Dispatcher()
 detectlanguage.configuration.api_key = detect_language_api
 
@@ -101,13 +98,13 @@ async def command_statistic(message: Message) -> None:
     remove(f'{message_id}.png')
 
 
-def translate(text):
+def translate(text, target):
     try:
         detected_language = detectlanguage.simple_detect(text)
-        translated_text = GoogleTranslator(source=detected_language, target='en').translate(text)
-        return translated_text
+        translated_text = GoogleTranslator(source=detected_language, target=target).translate(text)
+        return translated_text, detected_language
     except:
-        return text
+        return text, False
 
 
 def recognition(file_name):
@@ -151,6 +148,25 @@ def download_image(url, filename):
         return False
 
 
+def step_by_step_response(query, mode, file_name):
+    try:  # step-by-step solution
+        url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
+        soup = BeautifulSoup(requests.get(url).content, "xml")
+        subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
+
+        if mode:
+            img_tag = subpod.find("img")
+            step_resp = img_tag.get("src") if img_tag else False
+            step_resp = download_image(step_resp, file_name)
+        else:
+            plain_tag = subpod.find('plaintext')
+            step_resp = (plain_tag.get_text('\n', strip=True).
+                         replace('Answer: | \n |', '\nAnswer:\n')) if plain_tag else False
+
+        return step_resp
+    except:
+        return False
+
 @dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
 async def wolfram(message: types.Message) -> None:
     name = f'{message.from_user.full_name}({message.from_user.username})'
@@ -178,8 +194,8 @@ async def wolfram(message: types.Message) -> None:
 
     await message.answer('Computing...')  # a temporary message that will be deleted
 
-    query = quote(translate(text))  # 'quote' replace spaces and other special characters with their encoded values
-    # translate() - function that translates the test (goes below)
+    translated_text, l = translate(text, 'en')
+    query = quote(translated_text) # 'quote' replace spaces and other special characters with their encoded values
 
     if mode and no_error:  # If picture mode
         spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={query}').text
@@ -190,33 +206,27 @@ async def wolfram(message: types.Message) -> None:
         wf_understand = True
         if spok_resp == 'Wolfram Alpha did not understand your input':
             # If spok_resp gives 'Wolfram Alpha did not understand...', there is no point in processing other responses
-            spok_resp = simp = step = False
+            spok_resp = simp_resp = step_resp = False
             wf_understand = False
-            add += 'Did not understand'
+            add += 'Did not understand. '
 
         else:
-            simp = download_image(simp_resp, simp_file_name)
+            simp_resp = download_image(simp_resp, simp_file_name)
+            step_resp = step_by_step_response(query, mode, step_file_name)
 
-            try:  # step-by-step solution
-                url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
-                soup = BeautifulSoup(requests.get(url).content, "xml")
-                subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
-                img_tag = subpod.find("img")
-                step_resp = img_tag.get("src") if img_tag else False
-                step = download_image(step_resp, step_file_name)
-            except:
-                step = False
-
-        spok_resp = '' if spok_resp == 'No spoken result available' else spok_resp
+        if spok_resp == 'No spoken result available':
+            spok_resp = ''
+        else:
+            spok_resp = translate(spok_resp, l)[0]
 
         try:
-            if step:  # If a step-by-step solution is in place
+            if step_resp:  # If a step-by-step solution is in place
                 photo_list = [InputMediaPhoto(media=FSInputFile(simp_file_name), caption=spok_resp), InputMediaPhoto(media=FSInputFile(step_file_name))]
                 await bot.send_media_group(chat_id=message.chat.id, media=photo_list)
                 remove(simp_file_name)
                 remove(step_file_name)
 
-            elif wf_understand and simp:
+            elif wf_understand and simp_resp:
                 await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp)
                 remove(simp_file_name)
 
@@ -230,15 +240,7 @@ async def wolfram(message: types.Message) -> None:
 
     elif no_error:
         llm_resp = requests.get(f'https://www.wolframalpha.com/api/v1/llm-api?input={query}&appid={show_steps_api}').text
-        try:
-            url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
-            soup = BeautifulSoup(requests.get(url).content, "xml")
-            subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
-            plain_tag = subpod.find('plaintext')
-            step_resp = (plain_tag.get_text('\n', strip=True).
-                         replace('Answer: | \n |', '\nAnswer:\n')) if plain_tag else False
-        except:
-            step_resp = False
+        step_resp = step_by_step_response(query, mode, False)
 
         if 'Wolfram|Alpha could not understand: ' in llm_resp:
             await message.answer(llm_resp)
@@ -306,10 +308,4 @@ async def inline_close(callback: CallbackQuery):
 
 if __name__ == '__main__':
     sql_launch()
-
-
-    async def main():
-        await dp.start_polling(bot)
-
-
-    asyncio.run(main())
+    dp.run_polling(bot)
