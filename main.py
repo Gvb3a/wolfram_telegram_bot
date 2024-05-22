@@ -275,11 +275,12 @@ async def theory_geometry(callback: CallbackQuery):
 def short_answers(query):
     try:
         l = detectlanguage.simple_detect(query)
+        query = GoogleTranslator(source=l, target="en").translate(query)
+        text = requests.get(f'http://api.wolframalpha.com/v1/result?appid={short_answers_api}&i={quote(query)}').text
+        return GoogleTranslator(source='en', target=l).translate(text)
     except:
-        l = 'en'
-    query = GoogleTranslator(source=l, target="en").translate(query)
-    text = requests.get(f'http://api.wolframalpha.com/v1/result?appid={short_answers_api}&i={quote(query)}').text
-    return GoogleTranslator(source='en', target=l).translate(text)
+        return requests.get(f'http://api.wolframalpha.com/v1/result?appid={short_answers_api}&i={quote(query)}').text
+
 
 
 @dp.inline_query()
@@ -296,11 +297,11 @@ async def inline_q(inline_query: types.InlineQuery):
         input_message_content=InputTextMessageContent(message_text=answer),
         title=answer
     )
-    await inline_query.answer([item], cache_time=1)
+    await inline_query.answer([item], cache_time=20)
     name = inline_query.from_user.full_name
     username = inline_query.from_user.username
     uid = inline_query.from_user.id
-    sql_message(f'inline query: {query}', f'{name}({username})', uid, 'inline query.')
+    sql_message(f'inline query: {query}', f'{name}({username})', uid, f'inline query. {answer}')
 
 
 # you need to get in there and work on it. It's in too raw a state to leave it.
