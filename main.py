@@ -1,11 +1,12 @@
-import asyncio
 import json
 import requests
 import shutil
+import hashlib
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, InputFile
+from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 
 from os import remove  # delete a file
 from urllib.parse import quote  # string encoding into URL
@@ -119,7 +120,7 @@ def recognition(file_name):
         confidence = int(data['res']['conf'] * 100)
         add = f'Recognition({text}, conf={confidence}).'
 
-        if int(confidence * 100) <= 3 or text == '[DOCIMG]':
+        if int(confidence * 100) <= 2 or text == '[DOCIMG]':
             message_text = 'Failed to recognise text'
             no_error = False
         else:
@@ -222,12 +223,12 @@ async def wolfram(message: types.Message) -> None:
         try:
             if step_resp:  # If a step-by-step solution is in place
                 photo_list = [InputMediaPhoto(media=FSInputFile(simp_file_name), caption=spok_resp), InputMediaPhoto(media=FSInputFile(step_file_name))]
-                await bot.send_media_group(chat_id=message.chat.id, media=photo_list)
+                await bot.send_media_group(chat_id=message.chat.id, media=photo_list, request_timeout=10)
                 remove(simp_file_name)
                 remove(step_file_name)
 
             elif wf_understand and simp_resp:
-                await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp)
+                await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp, request_timeout=10)
                 remove(simp_file_name)
 
             else:
@@ -271,6 +272,38 @@ async def theory_geometry(callback: CallbackQuery):
     await callback.answer()
 
 
+def short_answers(query):
+    try:
+        l = detectlanguage.simple_detect(query)
+    except:
+        l = 'en'
+    query = GoogleTranslator(source=l, target="en").translate(query)
+    text = requests.get(f'http://api.wolframalpha.com/v1/result?appid={short_answers_api}&i={quote(query)}').text
+    return GoogleTranslator(source='en', target=l).translate(text)
+
+
+@dp.inline_query()
+async def inline_q(inline_query: types.InlineQuery):
+    query = inline_query.query or 'None'
+    l = inline_query.from_user.language_code
+    result_id = hashlib.md5(query.encode()).hexdigest()
+    if query == 'None':
+        answer = 'Enter what you want to calculate or know'
+    else:
+        answer = short_answers(query)
+    item = InlineQueryResultArticle(
+        id=result_id,
+        input_message_content=InputTextMessageContent(message_text=answer),
+        title=answer
+    )
+    await inline_query.answer([item], cache_time=1)
+    name = inline_query.from_user.full_name
+    username = inline_query.from_user.username
+    uid = inline_query.from_user.id
+    sql_message(f'inline query: {query}', f'{name}({username})', uid, 'inline query.')
+
+
+# you need to get in there and work on it. It's in too raw a state to leave it.
 """
 @dp.callback_query(F.data == 'theory>geometry')  # triangleArea, back
 async def theory_geometry(callback: CallbackQuery):
@@ -308,4 +341,4 @@ async def inline_close(callback: CallbackQuery):
 
 if __name__ == '__main__':
     sql_launch()
-    dp.run_polling(bot)
+    dp.run_polling(bot, skip_updates=True)
