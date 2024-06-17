@@ -18,6 +18,12 @@ from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from database import sql_launch, sql_message, sql_mode, sql_change_mode, sql_statistic
 from random_walk import random_walk_main
+"""
+from .config import *
+from .inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
+from .database import sql_launch, sql_message, sql_mode, sql_change_mode, sql_statistic
+from .random_walk import random_walk_main
+"""
 
 bot = Bot(bot_token)
 dp = Dispatcher()
