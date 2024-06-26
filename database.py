@@ -9,107 +9,89 @@ import numpy as np
 def sql_launch():
     connection = sqlite3.connect('wolfram_database.db')  # connecting to the database
     cursor = connection.cursor()
-    # create tables, if they did not exist before (new file). This table will store information about the message
+    # create tables, if they did not exist before (new file)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS message (
         message TEXT,
-        username TEXT,
-        time TEXT,
+        name TEXT,
+        time TEXT,    
         id INT,
         additionally TEXT
         )
         ''')
-    # User information (name, ID and mode) is stored here.
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user (
         name TEXT,
+        username TEXT,
         id INTEGER PRIMARY KEY,
-        mode INT
+        num_of_request INT,
+        first_request TEXT,
+        last_request TEXT
         )
         ''')
 
-    current_time = datetime.now().strftime("%H:%M:%S %d.%m.%Y")
-    print(f'The bot launches at {current_time}')
-    # print(f"The bot {Fore.RED}launches{Style.RESET_ALL} at {current_time}")
-
     connection.commit()  # Save the changes to the database
     connection.close()  # close the database
+    print('Launch')
 
 
-def sql_message(message, name, user_id, add):
+def sql_user(name: str, username: str, user_id: int):
     connection = sqlite3.connect('wolfram_database.db')
     cursor = connection.cursor()
 
-    sql_check(name, user_id,)
 
-    current_time = datetime.now().strftime("%H:%M:%S %d.%m.%Y")
-    print(f'{message} from {name} at {current_time}. {add}')
-    # print(f'{Fore.RED}{message}{Style.RESET_ALL} from {Fore.BLUE}{name}({user_id}){Style.RESET_ALL} at {current_time}. {add}')
-    cursor.execute(f"INSERT INTO message(message, username, time, id, additionally) VALUES ('{message}', '{name}', '{current_time}', {user_id}, '{add}')")
+    row = cursor.execute(f"SELECT * FROM user WHERE id = {user_id}").fetchall()
+    time = datetime.now().strftime("%d/%m/%Y")
 
-    connection.commit()
-    connection.close()
-
-
-def sql_mode(name, user_id):  # function for recognizing the current mode
-    connection = sqlite3.connect('wolfram_database.db')
-    cursor = connection.cursor()
-
-    sql_check(name, user_id)
-
-    cursor.execute(f"SELECT * FROM user WHERE id = {user_id}")
-    row = cursor.fetchone()
-
-    connection.close()
-    return row[2]  # [name, id, >>mode<<]
-
-
-def sql_change_mode(name, user_id):
-    connection = sqlite3.connect('wolfram_database.db')
-    cursor = connection.cursor()
-
-    sql_check(name, user_id)
-
-    cursor.execute(f"SELECT * FROM user WHERE id = {user_id}")
-    row = cursor.fetchone()
-
-    if row[2]:  # change mode
-        cursor.execute(f"UPDATE user SET mode = 0 WHERE id = {user_id}")
-        new_mode = 0
+    if row is None or row == []:
+        print(row==[])
+        cursor.execute(f"INSERT INTO user(name, username, id, num_of_request, first_request, last_request) VALUES ('{name}', '{username}', {user_id}, 0, '{time}', '{time}')")
     else:
-        cursor.execute(f"UPDATE user SET mode = 1 WHERE id = {user_id}")
-        new_mode = 1
+        cursor.execute(f'UPDATE user SET num_of_request = num_of_request+1 WHERE id = {user_id}')
+        cursor.execute(f'UPDATE user SET last_request = {time} WHERE id = {user_id}')
+    
+    """
+    row = cursor.execute(f"SELECT * FROM user WHERE id = {user_id}").fetchall()
+    if name != row[0]:  # [>>>name<<<, username, id, num_of_request, first_request, last_request]
+        cursor.execute(f'UPDATE user SET name = {name} WHERE id = {user_id}')
 
+    if username != row[1]:  # [name, >>>username<<<, id, num_of_request, first_request, last_request]
+        cursor.execute(f'UPDATE user SET name = {name} WHERE id = {user_id}')
+    """
+    
+    
     connection.commit()
     connection.close()
 
-    return new_mode  # revert the modified mode
 
-
-def sql_check(name, user_id):
+def sql_message(message: str, name: str, username:str, user_id:int, add:str):
     connection = sqlite3.connect('wolfram_database.db')
     cursor = connection.cursor()
 
-    cursor.execute(f"SELECT * FROM user WHERE id = {user_id}")
-    row = cursor.fetchone()
+    sql_user(name, username, user_id)
 
-    if row is None or None in row:
-        cursor.execute(f"INSERT INTO user(name, id, mode) VALUES ('{name}', {user_id}, 1)")
-        print(f'New user {name}')
-    elif name not in row:
-        cursor.execute(f"UPDATE user SET name = '{row[0]}, {name}' WHERE id = {user_id}")
+    if message[0] == '/':
+        add = 'Command.' 
+    time = datetime.now().strftime("%d.%m.%Y %H:%M")
+
+    cursor.execute(f"INSERT INTO message(message, name, time, id, additionally) VALUES ('{message}', '{name}', '{time}', {user_id}, '{add}')")
 
     connection.commit()
     connection.close()
+    print(f'{message}({add}) by {name} at {time}')
+
+
+
 
 
 def sql_statistic(file_name, admin):
+    # TODO: figure it out and retrieve data normally
     connection = sqlite3.connect('wolfram_database.db')
     cursor = connection.cursor()
 
     time = datetime.now().strftime('%m.%Y')
 
-    # I decided to process the information through SQL (rather than copying everything and writing algorithms myself) to get a better understanding of SQL.
     recognition = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE '%Recognition%'").fetchall())
     pictures = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE 'Pictures%'").fetchall())
     text = len(cursor.execute(f"SELECT * FROM message WHERE time LIKE '%{time}' AND additionally LIKE 'Text%'").fetchall())
@@ -130,13 +112,11 @@ def sql_statistic(file_name, admin):
     data = np.array(data).T
     positions = np.arange(len(labels)) + 1
 
-    # What's going on here
     bottom = np.zeros(len(labels))
     for i, values in enumerate(data):
         ax.bar(positions, values, bottom=bottom, label=legend[i])
         bottom += values
 
-    # -_-
     ax.set_xticks(positions)
     ax.set_xticklabels(labels)
     ax.set_ylim(0, bottom.max() + 10)
@@ -147,8 +127,3 @@ def sql_statistic(file_name, admin):
     plt.clf()
 
     connection.close()
-
-
-if __name__ == '__main__':
-    sql_statistic(1, 1)
-    
