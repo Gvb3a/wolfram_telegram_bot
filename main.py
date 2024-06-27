@@ -13,6 +13,7 @@ from urllib.parse import quote  # string encoding into URL
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
 import detectlanguage
+from random import choice
 
 from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
@@ -148,14 +149,28 @@ def step_by_step_response(query, file_name):
     except:
         return False
 
-def spok_resp_get(qtext):
+def g4f_convert(text):
     try:
-        spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={quote(qtext)}').text
-        w_understand = not(spok_resp.startswith('Wolfram Alpha did not understand your'))
-        return spok_resp, w_understand
-    except:
-        return 'ddd', False
+        client = Client()
+        response = client.chat.completions.create(
+            model=choice(['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo']),
+            messages=[
+                {"role": "system", "content": """My task is to TRANSFORM the user's query so that it is 
+                 UNDERSTANDABLE by Wolfram Alpha. The converted query MUST BE in ```. 
+                 If it is not possible to convert the query, I am answer the query"""},
+                {"role": "user", "content": text}
+            ]
+        )
+        resp = response.choices[0].message.content
+        return resp
+    except Exception as e:
+        print(e)
+        return text
 
+def spok_resp_get(text):
+        spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={quote(text)}').text
+        w_not_understand = spok_resp.startswith('Wolfram Alpha did not understand')
+        return spok_resp, w_not_understand
 
 
 @dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
@@ -183,21 +198,38 @@ async def wolfram(message: types.Message) -> None:
     
 
     translated_text, l = translate(text, 'en')
-    spok_resp, wolfram_understand = spok_resp_get(translated_text)
-    
-    
-    query = quote(translated_text) # 'quote' replace spaces and other special characters with their encoded values
-
-    simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
-    simp_file_name = str(id) + 'simp.png'
-    step_file_name = str(id) + 'step.png'
-    simp_resp = download_image(simp_resp, simp_file_name)
-    step_resp = step_by_step_response(query, step_file_name)
-
-    if spok_resp == 'No spoken result available':
-        spok_resp = ''
+    spok_resp, wolfram_not_understand = spok_resp_get(translated_text)
+    count = 0
+    if wolfram_not_understand:
+        await bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id + a, 
+                                    text='Wolfram|Alpha did not understand your input, but we will now ask ChatGPT')
+        while wolfram_not_understand and count < 3:
+            g4f_resp = g4f_convert(translated_text)
+            query = g4f_resp[g4f_resp.find('```')+3:g4f_resp.rfind('```')]
+            spok_resp, wolfram_not_understand = spok_resp_get(query)
+            count += 1
+            await bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id + a, 
+                                    text='Wolfram|Alpha did not understand your input, but we will now ask ChatGPT' + '.'*count)
     else:
-        spok_resp = translate(spok_resp, l)[0]
+        g4f_resp = 'https'
+        query = translated_text
+    
+    if wolfram_not_understand:
+        step_resp = False
+        simp_resp = False
+    else:
+        quote_query = quote(query) # 'quote' replace spaces and other special characters with their encoded values
+
+        simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={quote_query}%3F'
+        simp_file_name = str(id) + 'simp.png'
+        step_file_name = str(id) + 'step.png'
+        simp_resp = download_image(simp_resp, simp_file_name)
+        step_resp = step_by_step_response(quote_query, step_file_name)
+
+        if spok_resp == 'No spoken result available':
+            spok_resp = ''
+        else:
+            spok_resp = translate(spok_resp, l)[0]
 
 
 
@@ -208,16 +240,23 @@ async def wolfram(message: types.Message) -> None:
             remove(simp_file_name)
             remove(step_file_name)
 
-        elif simp_resp and wolfram_understand:
+        elif simp_resp:
             await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp, request_timeout=10)
             remove(simp_file_name)
+
+        elif not(wolfram_not_understand) and spok_resp != '':
+            await message.answer(spok_resp)
+
+        elif 'https' not in g4f_resp:
+            await message.answer(translate(g4f_resp, l)[0])
 
         else:
             await message.answer('Wolfram|Alpha did not understand your input')
 
-    except:
+    except Exception as e:
+        print(e)
         await message.answer(text=f'{spok_resp}\n'
-                            f'Some kind of error. Maybe the image is too big or the admin messed something up')
+                            f' Error. Most likely, the admin is changing something. Wait a few minutes.')
 
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + a)
     sql_message(text, message.from_user.full_name, message.from_user.username, message.from_user.id, add)
