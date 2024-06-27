@@ -1,7 +1,7 @@
 import json
 import requests
 import shutil
-# requests, aiogram, bs4, deep_translator, detectlanguage, matplotlib, colorama
+# requests, aiogram, bs4, deep_translator, detectlanguage, matplotlib, colorama, g4f, lxml
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, InputFile
@@ -87,16 +87,17 @@ async def command_statistic(message: Message) -> None:
 
 
 def translate(text, target):
-    try:
-        detected_language = detectlanguage.simple_detect(text)
-        translated_text = GoogleTranslator(source=detected_language, target=target).translate(text)
-        return translated_text, detected_language
+    # Usage. First we translate the user's request into English, since wolfram only understands this language
+    # We also take the language in which the user sent the request and translate the response into that language.
+    try: # in 3x-1=11 we will fail to recognize the language and get an error.
+        language = detectlanguage.simple_detect(text)
+        translated_text = GoogleTranslator(source=language, target=target).translate(text)
+        return translated_text, language
     except:
-        return text, False
+        return text, 'en'
 
 
 def recognition(file_name):
-    no_error = True
     header = {"token": simple_tex_api}
     file = [("file", (file_name, open(file_name, 'rb')))]
     response = requests.post('https://server.simpletex.net/api/latex_ocr', files=file, headers=header)
@@ -134,19 +135,27 @@ def download_image(url, filename):
     else:
         return False
 
-
-
-def step_by_step_response(query, file_name):
-    try:  # step-by-step solution
-        url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input=solve+{query}&podstate=Step-by-step%20solution'
-        soup = BeautifulSoup(requests.get(url).content, "xml")
-        subpod = soup.find("subpod", {"title": "Possible intermediate steps"})
-        img_tag = subpod.find("img")
-        step_resp = img_tag.get("src") if img_tag else False
-        step_resp = download_image(step_resp, file_name)
-
-        return step_resp
-    except:
+def step_by_step_response(query, file_name_prefix):
+    try:
+        url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input={query}&podstate=Step-by-step%20solution'
+        soup = BeautifulSoup(requests.get(url).content, "lxml")
+        
+        # Find all subpods with step-by-step solutions
+        subpods = soup.find_all("subpod", {"title": "Possible intermediate steps"})
+        
+        downloaded_files = []
+        
+        for index, subpod in enumerate(subpods):
+            img_tag = subpod.find("img")
+            if img_tag:
+                step_resp = img_tag.get("src")
+                file_name = f"{file_name_prefix}_{index + 1}.png"
+                
+                if download_image(step_resp, file_name):
+                    downloaded_files.append(file_name)
+        return downloaded_files if downloaded_files else False
+    except Exception as e:
+        print('Step by step: ', e)
         return False
 
 def g4f_convert(text):
@@ -164,7 +173,7 @@ def g4f_convert(text):
         resp = response.choices[0].message.content
         return resp
     except Exception as e:
-        print(e)
+        print(f'g4f: {e}')
         return text
 
 def spok_resp_get(text):
@@ -222,12 +231,12 @@ async def wolfram(message: types.Message) -> None:
 
         simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={quote_query}%3F'
         simp_file_name = str(id) + 'simp.png'
-        step_file_name = str(id) + 'step.png'
+        step_file_name = str(id)
         simp_resp = download_image(simp_resp, simp_file_name)
-        step_resp = step_by_step_response(quote_query, step_file_name)
+        step_resp = step_by_step_response(quote_query, str(id))
 
         if spok_resp == 'No spoken result available':
-            spok_resp = ''
+            spok_resp = '' 
         else:
             spok_resp = translate(spok_resp, l)[0]
 
@@ -235,10 +244,14 @@ async def wolfram(message: types.Message) -> None:
 
     try:
         if step_resp:  # If a step-by-step solution is in place
-            photo_list = [InputMediaPhoto(media=FSInputFile(simp_file_name), caption=spok_resp), InputMediaPhoto(media=FSInputFile(step_file_name))]
+            photo_list = [InputMediaPhoto(media=FSInputFile(simp_file_name), caption=spok_resp)]
+            for i in step_resp:
+                photo_list.append(InputMediaPhoto(media=FSInputFile(i)))
             await bot.send_media_group(chat_id=message.chat.id, media=photo_list, request_timeout=10)
+            
             remove(simp_file_name)
-            remove(step_file_name)
+            for i in range(len(step_resp)):
+                remove(f"{step_file_name}_{i + 1}.png")
 
         elif simp_resp:
             await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp, request_timeout=10)
@@ -254,7 +267,7 @@ async def wolfram(message: types.Message) -> None:
             await message.answer('Wolfram|Alpha did not understand your input')
 
     except Exception as e:
-        print(e)
+        print('Message: ', e)
         await message.answer(text=f'{spok_resp}\n'
                             f' Error. Most likely, the admin is changing something. Wait a few minutes.')
 
