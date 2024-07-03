@@ -1,30 +1,38 @@
 import json
 import requests
 import shutil
-# requests, aiogram, bs4, deep_translator, detectlanguage, matplotlib, colorama, g4f, lxml
+import os
+# requests, aiogram, bs4, deep_translator, detectlanguage, matplotlib, colorama, g4f, lxml, python-dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, InputFile
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 
 from g4f.client import Client
-from os import remove  # delete a file
-from urllib.parse import quote  # string encoding into URL
+from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
 import detectlanguage
 from random import choice
 
-from config import *
 from inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from database import sql_launch, sql_message, sql_statistic
 from random_walk import random_walk_main
 """
-from .config import *
 from .inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from .database import sql_launch, sql_message, sql_statistic
 from .random_walk import random_walk_main
 """
+
+load_dotenv()
+
+bot_token = os.getenv('BOT_TOKEN')
+simple_api = os.getenv('SIMPLE_API')  # One api is appropriate for both spoken api and simple api
+show_steps_api = os.getenv('SHOW_STEP_API')
+simple_tex_api = os.getenv('SIMPLE_TEX_API')
+detect_language_api = os.getenv('DETECT_LANGUAGE_API')  # The library I use for translation takes a very long time to process queries like 12x-1=3.
+admin_id = int(os.getenv('ADMIN_ID'))
+
 
 bot = Bot(bot_token)
 dp = Dispatcher()
@@ -63,8 +71,8 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
     await bot.delete_message(chat_id=message.chat.id, message_id=message_id)  # delete 'Computing...'
     await message.answer_photo(photo=FSInputFile(f'{message.message_id}.png'), caption=promt)  # sends png
     await message.answer_document(document=FSInputFile(f'{message.message_id}.pdf'))  # sends pdf
-    remove(f'{message.message_id}.png')  # deletes png
-    remove(f'{message.message_id}.pdf')  # deletes pdf
+    os.remove(f'{message.message_id}.png')  # deletes png
+    os.remove(f'{message.message_id}.pdf')  # deletes pdf
     sql_message(f'/random_walk({promt.strip()})', message.from_user.full_name, message.from_user.username, message.from_user.id, add='')
 
 
@@ -76,12 +84,12 @@ async def command_statistic(message: Message) -> None:
     sql_message('/statistic',  message.from_user.full_name, message.from_user.username, message.from_user.id, add='')
 
     
-    admin = True if user_id in admin_id else False
+    admin = True if user_id == admin_id else False
 
     sql_statistic(message_id, admin)
 
     await message.answer_photo(photo=FSInputFile(f'{message_id}.png'), caption='Update - /statistic')
-    remove(f'{message_id}.png')
+    os.remove(f'{message_id}.png')
 
 
 
@@ -120,7 +128,7 @@ def recognition(file_name):
 
     file_obj = file[0][1][1]
     file_obj.close()  # you can't delete a file without it
-    remove(file_name)
+    os.remove(file_name)
 
     return message_text, text, add
 
@@ -164,10 +172,9 @@ def g4f_convert(text):
         response = client.chat.completions.create(
             model=choice(['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo']),
             messages=[
-                {"role": "system", "content": """My task is to TRANSFORM the user's query so that it is 
-                 UNDERSTANDABLE by Wolfram Alpha. The converted query MUST BE in ```. 
-                 If it is not possible to convert the query, I am answer the query"""},
-                {"role": "user", "content": text}
+                {"role": "user", "content": f"""You task is to TRANSFORM the user's query so that it is 
+                 UNDERSTANDABLE by Wolfram Alpha. The converted query MUST BE in `. 
+                 If it is not possible to convert the query, you answer the query. Query: {text}"""}
             ]
         )
         resp = response.choices[0].message.content
@@ -177,7 +184,7 @@ def g4f_convert(text):
         return text
 
 def spok_resp_get(text):
-        spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={spoken_api}&i={quote(text)}').text
+        spok_resp = requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={simple_api}&i={requests.utils.requote_uri(text)}').text
         w_not_understand = spok_resp.startswith('Wolfram Alpha did not understand')
         return spok_resp, w_not_understand
 
@@ -211,14 +218,17 @@ async def wolfram(message: types.Message) -> None:
     count = 0
     if wolfram_not_understand:
         await bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id + a, 
-                                    text='Wolfram|Alpha did not understand your input, but we will now ask ChatGPT')
+                                    text='Wolfram|Alpha did not understand your input, but we will now ask ChatGPT.')
         while wolfram_not_understand and count < 3:
             g4f_resp = g4f_convert(translated_text)
-            query = g4f_resp[g4f_resp.find('```')+3:g4f_resp.rfind('```')]
+            query = g4f_resp[g4f_resp.find('`')+1:g4f_resp.rfind('`')]
             spok_resp, wolfram_not_understand = spok_resp_get(query)
             count += 1
             await bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id + a, 
-                                    text='Wolfram|Alpha did not understand your input, but we will now ask ChatGPT' + '.'*count)
+                                    text='Wolfram|Alpha did not understand your input, but we will now ask ChatGPT' + '.'*(count+1))
+        else:
+            t = 'ChatGPT was able to convert the request. Ask Wolfram Alpha' if not(wolfram_not_understand) else 'Didn\'t get your request converted. The ChatGPT response will now be displayed'
+            await bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id + a, text=t)
     else:
         g4f_resp = 'https'
         query = translated_text
@@ -227,7 +237,7 @@ async def wolfram(message: types.Message) -> None:
         step_resp = False
         simp_resp = False
     else:
-        quote_query = quote(query) # 'quote' replace spaces and other special characters with their encoded values
+        quote_query = requests.utils.requote_uri(query) # replace spaces and other special characters with their encoded values
 
         simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={quote_query}%3F'
         simp_file_name = str(id) + 'simp.png'
@@ -249,13 +259,13 @@ async def wolfram(message: types.Message) -> None:
                 photo_list.append(InputMediaPhoto(media=FSInputFile(i)))
             await bot.send_media_group(chat_id=message.chat.id, media=photo_list, request_timeout=10)
             
-            remove(simp_file_name)
+            os.remove(simp_file_name)
             for i in range(len(step_resp)):
-                remove(f"{step_file_name}_{i + 1}.png")
+                os.remove(f"{step_file_name}_{i + 1}.png")
 
         elif simp_resp:
             await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp, request_timeout=10)
-            remove(simp_file_name)
+            os.remove(simp_file_name)
 
         elif not(wolfram_not_understand) and spok_resp != '':
             await message.answer(spok_resp)
