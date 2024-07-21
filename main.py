@@ -6,18 +6,16 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, FSInputFile
 
-from g4f.client import Client
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
 import detectlanguage
-from random import choice
+from urllib.parse import quote
 
 from database import sql_launch, sql_message, sql_statistic
 from random_walk import random_walk_main
 
 """
-from .inline import keyboard, keyboard_geometry, help_message, help_keyboard, math_example, inline_help_back
 from .database import sql_launch, sql_message, sql_statistic
 from .random_walk import random_walk_main
 """
@@ -34,7 +32,6 @@ admin_id = int(os.getenv('ADMIN_ID'))
 bot = Bot(bot_token)
 dp = Dispatcher()
 detectlanguage.configuration.api_key = detect_language_api
-
 
 text_md = open('text.md')
 text = text_md.read()
@@ -164,27 +161,9 @@ def step_by_step_response(query, file_name_prefix):
         return False
 
 
-def g4f_convert(text):
-    try:
-        client = Client()
-        response = client.chat.completions.create(
-            model=choice(['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo']),
-            messages=[
-                {"role": "user", "content": f"""You task is to TRANSFORM the user's query so that it is 
-                 UNDERSTANDABLE by Wolfram Alpha. The converted query MUST BE in `. 
-                 If it is not possible to convert the query, you answer the query. Query: {text}"""}
-            ]
-        )
-        resp = response.choices[0].message.content
-        return resp
-    except Exception as e:
-        print(f'g4f Error: {e}')
-        return text
-
-
 def spok_resp_get(text):
     spok_resp = requests.get(
-        f'https://api.wolframalpha.com/v1/spoken?appid={simple_api}&i={requests.utils.requote_uri(text)}').text
+        f'https://api.wolframalpha.com/v1/spoken?appid={simple_api}&i={quote(text)}').text
     w_not_understand = spok_resp.startswith('Wolfram Alpha did not understand')
     return spok_resp, w_not_understand
 
@@ -221,8 +200,7 @@ async def wolfram(message: types.Message) -> None:
         simp_file_name = False
         step_file_name = False
     else:
-        quote_query = requests.utils.requote_uri(
-            query)  # replace spaces and other special characters with their encoded values
+        quote_query = quote(query)  # replace spaces and other special characters with their encoded values
 
         simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={quote_query}%3F'
         simp_file_name = str(message.message_id) + 'simp.png'
@@ -269,3 +247,4 @@ async def wolfram(message: types.Message) -> None:
 if __name__ == '__main__':
     sql_launch()
     dp.run_polling(bot, skip_updates=True)
+
