@@ -10,5 +10,7 @@ All API are stored in .env. Each of the APIs is completely free and easy to get.
 
 ## Todo
 - [ ] Comment the code normally
-- [ ] Make normal statistics
-- [ ] Maybe do something with random walk
+- [ ] Make normal statistics (last message)
+- [ ] Add llm (groq). If wolfram alpha doesn't understand the query, it tries to redo it. A diologue option may also be added. Also audio recognition
+- [ ] Quick reply in temporary reply
+- [ ] Different language for the interface
