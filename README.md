@@ -2,7 +2,7 @@
 Telegram bot with using [WolframAlpha API](https://products.wolframalpha.com/api/faqs). Written on [aiogram](https://docs.aiogram.dev/en/latest/). Try [here](https://t.me/wolfram_mp_bot)
 
 ## Api
-Before launching the bot it is necessary to fill in all APIs in `config.py` (all APIs are free)
+Before launching the bot, create an `.env` file and populate it with the following APIs (all APIs are free)
 
 * `BOT_TOKEN` - API for bot telegram. To get it you need to create a bot in [BotFather](https://t.me/BotFather)
 * `WOLFRAM_SIMPLE_API` - WolframAlpha API for [Simple API](https://products.wolframalpha.com/simple-api/documentation) and [Spoken Results API](https://products.wolframalpha.com/spoken-results-api/documentation)
