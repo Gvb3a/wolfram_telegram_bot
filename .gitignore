@@ -1,0 +1,6 @@
+config.py
+.git
+.venv
+wolfram_database.db
+__pycache__
+.devdbrc

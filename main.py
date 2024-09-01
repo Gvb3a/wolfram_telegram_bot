@@ -1,58 +1,74 @@
 import json
 import requests
-import shutil
+import asyncio
+import aiohttp
+import aiofiles
 import os
+import inspect
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, FSInputFile
 
-from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
 import detectlanguage
 from urllib.parse import quote
+from datetime import datetime
+from groq import Groq
 
-from database import sql_launch, sql_message, sql_statistic
+from database import sql_launch, sql_message
 from random_walk import random_walk_main
-
+from config import BOT_TOKEN, SIMPLE_API, SHOW_STEP_API, SIMPLE_TEX_API, DETECT_LANGUAGE_API, GROQ_API, prompt
 """
 from .database import sql_launch, sql_message, sql_statistic
 from .random_walk import random_walk_main
 """
 
-load_dotenv()
-
-bot_token = os.getenv('BOT_TOKEN')
-simple_api = os.getenv('SIMPLE_API')  # One api is appropriate for both spoken api and simple api
-show_steps_api = os.getenv('SHOW_STEP_API')
-simple_tex_api = os.getenv('SIMPLE_TEX_API')
-detect_language_api = os.getenv('DETECT_LANGUAGE_API')  # The library I use for translation takes a very long time to process queries like 12x-1=3.
-admin_id = int(os.getenv('ADMIN_ID'))
+bot_token = BOT_TOKEN
+simple_api = SIMPLE_API  # One api is appropriate for both spoken api and simple api
+show_steps_api = SHOW_STEP_API
+simple_tex_api = SIMPLE_TEX_API
+detect_language_api = DETECT_LANGUAGE_API  # The library I use for translation takes a very long time to process queries like 12x-1=3.
 
 bot = Bot(bot_token)
 dp = Dispatcher()
 detectlanguage.configuration.api_key = detect_language_api
+groq_client = Groq(api_key=GROQ_API)
 
-text_md = open('text.md')
-text = text_md.read()
-start_message = text[8:text.find('# /help')]  # start message between # /start and # /help
-help_message = text[text.find('# /help')+7:]  # help message is from # /help all the way through
-text_md.close()
 
+def get_dir_path():
+    frame = inspect.currentframe()
+    caller_frame = frame.f_back
+    caller_file_path = caller_frame.f_code.co_filename
+    return os.path.dirname(caller_file_path)
+
+json_path = get_dir_path() + '\\text.json'
 
 @dp.message(CommandStart())  # /start
 async def command_start(message: Message) -> None:
     name = message.from_user.full_name
     username = message.from_user.username
     user_id = message.from_user.id
+    language = message.from_user.language_code
 
-    await message.answer(text=f"Hello, {message.from_user.full_name}! {start_message}", parse_mode='Markdown', disable_web_page_preview=True)
+    with open(json_path, "r", encoding='utf-8') as file:
+        data = json.load(file)
+        start_message = data['start'].get(language, data['start']['en'])
+
+    await message.answer(text=start_message, parse_mode='Markdown', disable_web_page_preview=True)
 
     sql_message(message='/start', name=name, username=username, user_id=user_id, add='')  # database
 
 
 @dp.message(Command('help'))  # /help
 async def command_help(message: Message) -> None:
+    language = message.from_user.language_code
+
+    with open(json_path, "r", encoding='utf-8') as file:
+        data = json.load(file)
+        help_message = data['help'].get(language, data['help']['en'])
+
     await message.answer(text=help_message, parse_mode='Markdown')
     sql_message('/help', message.from_user.full_name, message.from_user.username, message.from_user.id, add='')
 
@@ -73,29 +89,20 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
                 message.from_user.id, add='')
 
 
-@dp.message(Command('statistic'))
-async def command_statistic(message: Message) -> None:
-    user_id = message.from_user.id
-    message_id = message.message_id
-    sql_message('/statistic', message.from_user.full_name, message.from_user.username, message.from_user.id, add='')
+def detect_language(text: str) -> str:
+    '''The input is text, the output is the language of the text.
+    
+    It is necessary that if the user wrote in a language other than English, save the language and translate the response'''
+    try:
+        return detectlanguage.simple_detect(text)
+    except:  # If the language cannot be determined, it is most likely an equation (For example 3x-1=11) 
+        return 'en'
+    
 
-    admin = True if user_id == admin_id else False
-
-    sql_statistic(message_id, admin)
-
-    await message.answer_photo(photo=FSInputFile(f'{message_id}.png'), caption='Update - /statistic')
-    os.remove(f'{message_id}.png')
-
-
-def translate(text, target):
-    # Usage. First we translate the user's request into English, since wolfram only understands this language
-    # We also take the language in which the user sent the request and translate the response into that language.
-    try:  # in 3x-1=11 we will fail to recognize the language and get an error.
-        language = detectlanguage.simple_detect(text)
-        translated_text = GoogleTranslator(source=language, target=target).translate(text)
-        return translated_text, language
-    except:
-        return text, 'en'
+def translate(text: str, target_language: str = 'en', source_language: str = 'auto') -> str:
+    '''The function translates text from source_language (recognizes itself if nothing is specified) to target_language (en by default).'''
+    translated_text = GoogleTranslator(source=source_language, target=target_language).translate(text)
+    return translated_text
 
 
 def recognition(file_name):
@@ -126,46 +133,109 @@ def recognition(file_name):
     return message_text, text, add
 
 
-def download_image(url, filename):
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(filename, 'wb') as file:
-            response.raw.decode_content = True
-            shutil.copyfileobj(response.raw, file)
-        return True
-    else:
-        return False
+async def download_image_async(url: str, filename: str):
+    '''Asynchronously download an image from a URL. Returns path to image or False'''
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, timeout=60) as response:
+            
+            if response.status == 200:
+                async with aiofiles.open(filename, 'wb') as file:
+                    await file.write(await response.read())
+
+                full_path = os.path.abspath(filename)
+                return full_path
+            
+            else:
+                return False
+            
+
+def wolfram_quick_answer(text: str) -> str:
+    '''Return wolfram short answer'''
+    query = quote(text)
+    return requests.get(f'https://api.wolframalpha.com/v1/spoken?appid={simple_api}&i={query}').text
 
 
-def step_by_step_response(query, file_name_prefix):
-    try:
-        url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input={query}&podstate=Step-by-step%20solution'
-        soup = BeautifulSoup(requests.get(url).content, "lxml")
+async def wolfram_simple_answer(text: str) -> str | bool:
+    '''Return link to wolfram simple answer (asynchronously)'''
+    query = quote(text)
+    link = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={query}%3F'
 
-        # Find all subpods with step-by-step solutions
-        subpods = soup.find_all("subpod", {"title": "Possible intermediate steps"})
+    filename = f"wolfram_simple_answer-{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
+    path = await download_image_async(link, filename)
 
-        downloaded_files = []
-
-        for index, subpod in enumerate(subpods):
-            img_tag = subpod.find("img")
-            if img_tag:
-                step_resp = img_tag.get("src")
-                file_name = f"{file_name_prefix}_{index + 1}.png"
-
-                if download_image(step_resp, file_name):
-                    downloaded_files.append(file_name)
-        return downloaded_files if downloaded_files else False
-    except Exception as e:
-        print(f'Step by step Error: {e}')
-        return False
+    return str(path)
 
 
-def spok_resp_get(text):
-    spok_resp = requests.get(
-        f'https://api.wolframalpha.com/v1/spoken?appid={simple_api}&i={quote(text)}').text
-    w_not_understand = spok_resp.startswith('Wolfram Alpha did not understand')
-    return spok_resp, w_not_understand
+async def wolfram_step_by_step(text: str) -> tuple[str, list]:
+    '''Returns a step by step solution in the form of a string and a list of picture links (asynchronously)'''
+    query = quote(text)
+    url = f'https://api.wolframalpha.com/v1/query?appid={show_steps_api}&input={query}&podstate=Step-by-step%20solution'
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            content = await response.text()
+            soup = BeautifulSoup(content, "xml")
+
+            subpods = soup.find_all("subpod", {"title": "Possible intermediate steps"})
+            
+            step_images = []
+            # step_plain = ''
+
+            for subpod in subpods:
+                img_tag = subpod.find("img")
+                if img_tag:
+                    step_resp_img = img_tag.get("src")
+                    step_images.append(step_resp_img)
+                '''
+                plain_tag = subpod.find('plaintext')
+                step_resp = plain_tag.get_text('\n', strip=True)
+                step_resp = step_resp.replace('Answer: | \n |', '\nAnswer:\n') if plain_tag else False
+                if step_resp:
+                    step_plain += step_resp + '\n\n'
+                '''
+            
+            nw = datetime.now().strftime('%Y%m%d_%H%M%S%f')
+            downloaded_image_paths = await asyncio.gather(*[download_image_async(url, f'wolfram_step_by_step-{nw}-{i}.png') for i, url in enumerate(step_images)])
+
+            return downloaded_image_paths
+
+
+def groq_api(messages: list, model: str = 'llama-3.1-70b-versatile') -> str:
+    response = groq_client.chat.completions.create(
+            messages=messages,
+            model=model)
+    return str(response.choices[0].message.content)
+
+
+
+async def ask_wolfram_alpha(text: str) -> tuple[str, list]:
+    '''Asynchronous function. Returns quick response, step by step solution text and downloaded image paths (simple(page) and step by step)'''
+    # all three queries take 2 seconds
+
+    quick_answer = 'Wolfram|Alpha did not understand your input'
+
+    if 'Wolfram|Alpha did not understand your input' in quick_answer:
+        print(f'Wolfram|Alpha did not understand {text}. Ask llm')
+        messages = [
+            {'role': 'user', 'content': prompt},
+            {'role': 'user', 'content': text}
+        ]
+        answer = groq_api(messages=messages)
+        action_input_index = answer.index('Action Input:')+len('Action Input:')
+        text = answer[action_input_index:].strip().lower()
+        quick_answer = wolfram_quick_answer(text)
+
+    simple_answer_task = asyncio.create_task(wolfram_simple_answer(text))
+    step_by_step_task = asyncio.create_task(wolfram_step_by_step(text))
+
+    simple_answer_link = await simple_answer_task
+    step_images = await step_by_step_task
+
+    images = [image for image in step_images if image]
+    if simple_answer_link:
+        images.insert(0, simple_answer_link)
+    
+    return quick_answer, images
 
 
 @dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
@@ -189,62 +259,31 @@ async def wolfram(message: types.Message) -> None:
         a = 1
 
     await message.answer('Computing...')  # a temporary message that will be deleted
+    
+    language = detect_language(text=text)
+    if language != 'en':
+        text = translate(text=text, target_language='en', source_language=language)
+        
+    result, images = await ask_wolfram_alpha(text)
+    
+    if language != 'en':
+        result = translate(text=result, target_language=language, source_language='en')
 
-    translated_text, l = translate(text, 'en')
-    spok_resp, wolfram_not_understand = spok_resp_get(translated_text)
-    query = translated_text
-
-    if wolfram_not_understand:
-        step_resp = False
-        simp_resp = False
-        simp_file_name = False
-        step_file_name = False
-    else:
-        quote_query = quote(query)  # replace spaces and other special characters with their encoded values
-
-        simp_resp = f'https://api.wolframalpha.com/v1/simple?appid={simple_api}&i={quote_query}%3F'
-        simp_file_name = str(message.message_id) + 'simp.png'
-        step_file_name = str(message.message_id)
-        simp_resp = download_image(simp_resp, simp_file_name)
-        step_resp = step_by_step_response(quote_query, str(message.message_id))
-
-        if spok_resp == 'No spoken result available':
-            spok_resp = ''
-        else:
-            spok_resp = translate(spok_resp, l)[0]
-
-    try:
-        if step_resp:  # If a step-by-step solution is in place
-            photo_list = [InputMediaPhoto(media=FSInputFile(simp_file_name), caption=spok_resp)]
-            for i in step_resp:
-                photo_list.append(InputMediaPhoto(media=FSInputFile(i)))
-            await bot.send_media_group(chat_id=message.chat.id, media=photo_list, request_timeout=10)
-
-            os.remove(simp_file_name)
-            for i in range(len(step_resp)):
-                os.remove(f"{step_file_name}_{i + 1}.png")
-
-        elif simp_resp:
-            await bot.send_photo(chat_id=message.chat.id, photo=FSInputFile(simp_file_name), caption=spok_resp,
-                                 request_timeout=10)
-            os.remove(simp_file_name)
-
-        elif not (wolfram_not_understand) and spok_resp != '':
-            await message.answer(spok_resp)
-
-        else:
-            await message.answer('Wolfram|Alpha did not understand your input')
-
-    except Exception as e:
-        print('Message: ', e)
-        await message.answer(text=f'{spok_resp}\n'
-                                  f' Error. Most likely, the admin is changing something. Wait a few minutes.')
-
+    caption = result[:1000]  # telegram has a limitation: you can only post a 1000 character message for a photo. Just in case
+    media = [InputMediaPhoto(media=FSInputFile(path=images[0]), 
+                                            caption=caption)]
+    for image in images[1:]:
+        media.append(InputMediaPhoto(media=FSInputFile(path=image)))
+    await message.answer_media_group(media=media, parse_mode='Markdown')
+    
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + a)
+
+    for image in images:
+        os.remove(image)
+    add += result
     sql_message(text, message.from_user.full_name, message.from_user.username, message.from_user.id, add)
 
 
 if __name__ == '__main__':
     sql_launch()
     dp.run_polling(bot, skip_updates=True)
-
