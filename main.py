@@ -220,8 +220,7 @@ def groq_api(messages: list, model: str = 'llama-3.1-70b-versatile') -> str:
 async def ask_wolfram_alpha(text: str) -> tuple[str, list]:
     '''Asynchronous function. Returns quick response, step by step solution text and downloaded image paths (simple(page) and step by step)'''
     # all three queries take 2 seconds
-
-    quick_answer = 'Wolfram|Alpha did not understand your input'
+    quick_answer = wolfram_quick_answer(text)
 
     if 'Wolfram|Alpha did not understand your input' in quick_answer:
         print(f'Wolfram|Alpha did not understand {text}. Ask llm')
