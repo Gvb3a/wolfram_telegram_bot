@@ -1,16 +1,18 @@
 # WolframAlpha telegram bot
-This telegram bot uses [WolframAlpha API](https://products.wolframalpha.com/api/faqs) to answer queries.  There is image recognition using the free Mathpix analog [SimpleTex](https://www.simpletex.net/). There is also a translator that helps to write a query in any language. The bot is written by [aiogram](https://docs.aiogram.dev/en/latest/)
+Telegram bot with using [WolframAlpha API](https://products.wolframalpha.com/api/faqs). Written on [aiogram](https://docs.aiogram.dev/en/latest/). Try [here](https://t.me/wolfram_mp_bot)
 
 ## Api
-All API are stored in .env. Each of the APIs is completely free and easy to get.
-- BOT_TOKEN. This is the API for Telegram. Go to [BotFather](https://t.me/BotFather), create a bot and get a token.
-- SIMPLE_API and SHOW_STEP_API. The bots brain (WolframAlpha). Go to [developer portal](https://developer.wolframalpha.com/), register and click on "Get an App ID". There you will get two APIs: [Simple API](https://products.wolframalpha.com/simple-api/documentation) and [Show Steps API](https://products.wolframalpha.com/show-steps-api/documentation). Wolfram offers 2000 free calls per month! That's enough for everything.
-- SIMPLE_TEX_API. Allows to convert photo to LaTeX. Was planning to do it with [Mathpix](https://mathpix.com/), but it's paid, so I'm using [SimpleTex](https://simpletex.net/). Receipt path: [API Dashboard](https://simpletex.net/user/center?menu=oapi) >>> register >>> User Access Token >>> Create New Token
-- DETECT_LANGUAGE_API. This API is needed for the translator. The translation itself is done through [deep_translator](https://pypi.org/project/deep-translator/) which does not require an api for translation, but it takes a very long time to detect the language itself in something like this: "3x-1=11". So for optimisation I use the API that detects the language. Go to [Detect Language API](https://detectlanguage.com/), click on 'Get API key' and register.
+Before launching the bot it is necessary to fill in all APIs in `config.py` (all APIs are free)
+
+* `BOT_TOKEN` - API for bot telegram. To get it you need to create a bot in [BotFather](https://t.me/BotFather)
+* `WOLFRAM_SIMPLE_API` - WolframAlpha API for [Simple API](https://products.wolframalpha.com/simple-api/documentation) and [Spoken Results API](https://products.wolframalpha.com/spoken-results-api/documentation)
+* `WOLFRAM_SHOW_STEP_API` - WolframAlpha API for [Show Steps API](https://products.wolframalpha.com/show-steps-api/documentation)
+* `SIMPLE_TEX_API` - the API of the Chinese analog of [Mathpix](https://mathpix.com/). Get it from [site](https://simpletex.net/api)
+* `DETECT_LANGUAGE_API` - Even though translation is done through [deep_translator](https://pypi.org/project/deep-translator/) and does not require an API, I use [Detect Language API](https://detectlanguage.com/) to save the user's language and translate responses
+* `GROQ_API` - API for free access to llm and sound recognition. [Site](https://console.groq.com/login)
 
 ## Todo
-- [ ] Comment the code normally
-- [ ] Make normal statistics (last message)
-- [ ] Add llm (groq). If wolfram alpha doesn't understand the query, it tries to redo it. A diologue option may also be added. Also audio recognition
-- [ ] Quick reply in temporary reply
-- [ ] Different language for the interface
+- [ ] Comment and clean up the code 
+- [ ] Statistics
+- [ ] Improve interaction with the database
+- [ ] Improve random walk
