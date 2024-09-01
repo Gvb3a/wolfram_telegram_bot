@@ -1,4 +1,4 @@
-config.py
+.env
 .git
 .venv
 wolfram_database.db

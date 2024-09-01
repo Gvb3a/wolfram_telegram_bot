@@ -16,25 +16,34 @@ import detectlanguage
 from urllib.parse import quote
 from datetime import datetime
 from groq import Groq
+from dotenv import load_dotenv
 
 from database import sql_launch, sql_message
 from random_walk import random_walk_main
-from config import BOT_TOKEN, WOLFRAM_SIMPLE_API, WOLFRAM_SHOW_STEP_API, SIMPLE_TEX_API, DETECT_LANGUAGE_API, GROQ_API, prompt
 """
 from .database import sql_launch, sql_message, sql_statistic
 from .random_walk import random_walk_main
 """
 
-bot_token = BOT_TOKEN
-simple_api = WOLFRAM_SIMPLE_API  # One api is appropriate for both spoken api and simple api
-show_steps_api = WOLFRAM_SHOW_STEP_API
-simple_tex_api = SIMPLE_TEX_API
-detect_language_api = DETECT_LANGUAGE_API  # The library I use for translation takes a very long time to process queries like 12x-1=3.
+load_dotenv()
+bot_token = os.getenv('BOT_TOKEN')
+simple_api = os.getenv('SIMPLE_API')
+show_steps_api = os.getenv('SHOW_STEP_API')
+simple_tex_api = os.getenv('SIMPLE_TEX_API')
+detect_language_api = os.getenv('DETECT_LANGUAGE_API')
 
 bot = Bot(bot_token)
 dp = Dispatcher()
 detectlanguage.configuration.api_key = detect_language_api
-groq_client = Groq(api_key=GROQ_API)
+groq_client = Groq(api_key=os.getenv('GROQ_API'))
+
+prompt = """You will need to turn the user's request into a correct one for wolfram alpha (you get the ones that WolframAlpha doesn't understand).
+
+Answer in the following format:
+
+Thought: Think about what the user wanted to write or get Action 
+Action Input: What goes into WolframAlpha
+"""
 
 
 def get_dir_path():
