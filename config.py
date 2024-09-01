@@ -1,9 +1,9 @@
-BOT_TOKEN=''
-SIMPLE_API=''
+BOT_TOKEN=''  # https://t.me/BotFather
+SIMPLE_API=''  # https://developer.wolframalpha.com/
 SHOW_STEP_API=''
-SIMPLE_TEX_API=''
-DETECT_LANGUAGE_API=''
-GROQ_API=''
+SIMPLE_TEX_API=''  # https://detectlanguage.com/
+DETECT_LANGUAGE_API=''  # https://detectlanguage.com/
+GROQ_API=''  # https://console.groq.com/login
 
 prompt = """You will need to turn the user's request into a correct one for wolfram alpha (you get the ones that WolframAlpha doesn't understand).
 
