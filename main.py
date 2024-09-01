@@ -19,15 +19,15 @@ from groq import Groq
 
 from database import sql_launch, sql_message
 from random_walk import random_walk_main
-from config import BOT_TOKEN, SIMPLE_API, SHOW_STEP_API, SIMPLE_TEX_API, DETECT_LANGUAGE_API, GROQ_API, prompt
+from config import BOT_TOKEN, WOLFRAM_SIMPLE_API, WOLFRAM_SHOW_STEP_API, SIMPLE_TEX_API, DETECT_LANGUAGE_API, GROQ_API, prompt
 """
 from .database import sql_launch, sql_message, sql_statistic
 from .random_walk import random_walk_main
 """
 
 bot_token = BOT_TOKEN
-simple_api = SIMPLE_API  # One api is appropriate for both spoken api and simple api
-show_steps_api = SHOW_STEP_API
+simple_api = WOLFRAM_SIMPLE_API  # One api is appropriate for both spoken api and simple api
+show_steps_api = WOLFRAM_SHOW_STEP_API
 simple_tex_api = SIMPLE_TEX_API
 detect_language_api = DETECT_LANGUAGE_API  # The library I use for translation takes a very long time to process queries like 12x-1=3.
 
@@ -238,20 +238,52 @@ async def ask_wolfram_alpha(text: str) -> tuple[str, list]:
     return quick_answer, images
 
 
-@dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
+async def download_file_for_id(file_id, extension):
+
+    file = await bot.get_file(file_id)
+    file_path = str(file.file_path)
+    now = datetime.now()
+    file_name = f'{now.strftime("%Y%m%d_%H%M%S")}.{extension}'
+
+    await bot.download_file(file_path, file_name)
+
+    return file_name
+
+
+def speech_recognition(file_name: str) -> str:
+    with open(file_name, "rb") as file:
+        translation = groq_client.audio.transcriptions.create(
+        file=(file_name, file.read()),
+        model="whisper-large-v3")
+            
+        text = translation.text
+
+    return str(text).strip()
+
+
+@dp.message((F.text | F.photo | F.voice))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
 async def wolfram(message: types.Message) -> None:
     add = ''
-    if message.photo:
+    if message.photo or message.voice:
 
         await message.answer('Recognition...')
-        file_name = f'{message.message_id}.png'
-        await message.bot.download(file=message.photo[-1].file_id, destination=file_name)  # download image
 
-        message_text, text, rec_add = recognition(file_name)
-        add += rec_add
+        if message.photo:
+            file_name = await download_file_for_id(file_id=message.photo[-1].file_id, extension='png')
+            message_text, text, add = recognition(file_name)
+
+        else:
+            file_name = await download_file_for_id(file_id=message.voice.file_id, extension='mp3')
+            text = speech_recognition(file_name=file_name).strip()
+            add = f'Recognition: {text}'
+            message_text = f'Recognition: {text}'
+            os.remove(file_name)
+
+
         await message.answer(text=message_text, parse_mode='Markdown')
         await bot.delete_message(chat_id=message.from_user.id, message_id=message.message_id + 1)
         a = 3  # this is necessary for successful deletion of the processing message at the end
+
 
 
     else:
