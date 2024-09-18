@@ -1,49 +1,34 @@
+
+import os
+import inspect
+import PIL.Image
 import json
 import requests
+
 import asyncio
 import aiohttp
 import aiofiles
-import os
-import inspect
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InputMediaPhoto, Message, FSInputFile
 
 from bs4 import BeautifulSoup
-from deep_translator import GoogleTranslator
-import detectlanguage
+from dotenv import load_dotenv
 from urllib.parse import quote
 from datetime import datetime
-from groq import Groq
-from dotenv import load_dotenv
 
-from database import sql_launch, sql_message
-from random_walk import random_walk_main
-"""
-from .database import sql_launch, sql_message, sql_statistic
-from .random_walk import random_walk_main
-"""
+from deep_translator import GoogleTranslator
+import detectlanguage
+import google.generativeai as genai
 
-load_dotenv()
-bot_token = os.getenv('BOT_TOKEN')
-simple_api = os.getenv('SIMPLE_API')
-show_steps_api = os.getenv('SHOW_STEP_API')
-simple_tex_api = os.getenv('SIMPLE_TEX_API')
-detect_language_api = os.getenv('DETECT_LANGUAGE_API')
 
-bot = Bot(bot_token)
-dp = Dispatcher()
-detectlanguage.configuration.api_key = detect_language_api
-groq_client = Groq(api_key=os.getenv('GROQ_API'))
-
-prompt = """You will need to turn the user's request into a correct one for wolfram alpha (you get the ones that WolframAlpha doesn't understand).
-
-Answer in the following format:
-
-Thought: Think about what the user wanted to write or get Action 
-Action Input: What goes into WolframAlpha
-"""
+if __name__ == '__main__' or '.' not in __name__:
+    from database import sql_launch, sql_message
+    from random_walk import random_walk_main
+else:
+    from .database import sql_launch, sql_message, sql_statistic
+    from .random_walk import random_walk_main
 
 
 def get_dir_path():
@@ -52,7 +37,23 @@ def get_dir_path():
     caller_file_path = caller_frame.f_code.co_filename
     return os.path.dirname(caller_file_path)
 
-json_path = get_dir_path() + '\\text.json'
+json_path = os.path.join(get_dir_path(), 'text.json')
+env_path = os.path.join(get_dir_path(), '.env')
+
+load_dotenv(dotenv_path=env_path)
+bot_token = os.getenv('BOT_TOKEN')
+simple_api = os.getenv('SIMPLE_API')
+show_steps_api = os.getenv('SHOW_STEP_API')
+simple_tex_api = os.getenv('SIMPLE_TEX_API')
+detect_language_api = os.getenv('DETECT_LANGUAGE_API')
+genai_api = os.getenv('GENAI_API_KEY')
+
+bot = Bot(bot_token)
+dp = Dispatcher()
+detectlanguage.configuration.api_key = detect_language_api
+genai.configure(api_key=genai_api)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
 
 @dp.message(CommandStart())  # /start
 async def command_start(message: Message) -> None:
@@ -67,7 +68,7 @@ async def command_start(message: Message) -> None:
 
     await message.answer(text=start_message, parse_mode='Markdown', disable_web_page_preview=True)
 
-    sql_message(message='/start', name=name, username=username, user_id=user_id, add='')  # database
+    sql_message(message='/start', name=name, username=username, user_id=user_id)  # database
 
 
 @dp.message(Command('help'))  # /help
@@ -79,7 +80,7 @@ async def command_help(message: Message) -> None:
         help_message = data['help'].get(language, data['help']['en'])
 
     await message.answer(text=help_message, parse_mode='Markdown')
-    sql_message('/help', message.from_user.full_name, message.from_user.username, message.from_user.id, add='')
+    sql_message('/help', message.from_user.full_name, message.from_user.username, message.from_user.id)
 
 
 @dp.message(Command('random_walk'))  # Random walk simulation
@@ -95,7 +96,7 @@ async def command_random_walk(message: Message) -> None:  # sends png and pdf wi
     os.remove(f'{message.message_id}.png')  # deletes png
     os.remove(f'{message.message_id}.pdf')  # deletes pdf
     sql_message(f'/random_walk({promt.strip()})', message.from_user.full_name, message.from_user.username,
-                message.from_user.id, add='')
+                message.from_user.id)
 
 
 def detect_language(text: str) -> str:
@@ -124,7 +125,6 @@ def recognition(file_name):
         # example: {'status': True, 'res': {'latex': '(a-b)^3=a^3-b^3-3ab(a-b)', 'conf': 0.95109701156}, 'request_id': 'tr_119214373618527781'}
         text = str(data['res']['latex'])
         confidence = int(data['res']['conf'] * 100)
-        add = f'Recognition({text}, conf={confidence}).'
 
         if int(confidence * 100) <= 2 or text == '[DOCIMG]':
             message_text = 'Failed to recognise text'
@@ -132,14 +132,22 @@ def recognition(file_name):
             message_text = f'Data: `${text}$`\nConfidence: {confidence}%'
     else:
         text = 'Error'
-        add = f'Recognition error({response.status_code}'
         message_text = f'Error {response.status_code}. If the image is fine, please contact admin @gvb3a'
 
     file_obj = file[0][1][1]
-    file_obj.close()  # you can't delete a file without it
-    os.remove(file_name)
+    file_obj.close()
 
-    return message_text, text, add
+    return message_text, text
+
+
+def recognition_with_gemini(image_path: str) -> str:
+    image = PIL.Image.open(image_path)
+    
+    text = 'Your task is to convert a picture into a query for Wolfram Alpha. Nothing extra, your entire response will go to Wolfram Alpha'
+
+    response = model.generate_content([text, image])
+    print(response.text)
+    return response.text.strip()
 
 
 async def download_image_async(url: str, filename: str):
@@ -209,28 +217,28 @@ async def wolfram_step_by_step(text: str) -> tuple[str, list]:
             return downloaded_image_paths
 
 
-def groq_api(messages: list, model: str = 'llama-3.1-70b-versatile') -> str:
-    response = groq_client.chat.completions.create(
-            messages=messages,
-            model=model)
-    return str(response.choices[0].message.content)
-
+def genai_text_api(user_message: str):
+    # It would be much better to let the model think, but it's an easy task, so that's fine.
+    chat = model.start_chat(history=[
+    {
+        'role': 'model',
+        'parts': 'You will need to turn the user\'s request into a correct one for wolfram alpha (you get the ones that WolframAlpha doesn\'t understand). Nothing extra: your entire answer will go to WolframAlpha.',
+    },
+])
+    response = chat.send_message(user_message)
+    print(response.text)
+    return response.text.strip()
 
 
 async def ask_wolfram_alpha(text: str) -> tuple[str, list]:
     '''Asynchronous function. Returns quick response, step by step solution text and downloaded image paths (simple(page) and step by step)'''
     # all three queries take 2 seconds
+    
     quick_answer = wolfram_quick_answer(text)
-
-    if 'Wolfram|Alpha did not understand your input' in quick_answer:
-        print(f'Wolfram|Alpha did not understand {text}. Ask llm')
-        messages = [
-            {'role': 'user', 'content': prompt},
-            {'role': 'user', 'content': text}
-        ]
-        answer = groq_api(messages=messages)
-        action_input_index = answer.index('Action Input:')+len('Action Input:')
-        text = answer[action_input_index:].strip().lower()
+    
+    if 'Wolfram Alpha did not understand your input' in quick_answer:
+        print(f'Ask llm ({text})')
+        text = genai_text_api(text)
         quick_answer = wolfram_quick_answer(text)
 
     simple_answer_task = asyncio.create_task(wolfram_simple_answer(text))
@@ -258,49 +266,25 @@ async def download_file_for_id(file_id, extension):
     return file_name
 
 
-def speech_recognition(file_name: str) -> str:
-    with open(file_name, "rb") as file:
-        translation = groq_client.audio.transcriptions.create(
-        file=(file_name, file.read()),
-        model="whisper-large-v3")
-            
-        text = translation.text
 
-    return str(text).strip()
-
-
-@dp.message((F.text | F.photo | F.voice))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
+@dp.message((F.text | F.photo))  # Message processing using WolframAlpha API (if photo, SimpleTex api is also used)
 async def wolfram(message: types.Message) -> None:
-    add = ''
+    
+    await message.answer('Computing...')
+
     if message.photo or message.voice:
-
-        await message.answer('Recognition...')
-
-        if message.photo:
-            file_name = await download_file_for_id(file_id=message.photo[-1].file_id, extension='png')
-            message_text, text, add = recognition(file_name)
-
-        else:
-            file_name = await download_file_for_id(file_id=message.voice.file_id, extension='mp3')
-            text = speech_recognition(file_name=file_name).strip()
-            add = f'Recognition: {text}'
-            message_text = f'Recognition: {text}'
-            os.remove(file_name)
-
-
-        await message.answer(text=message_text, parse_mode='Markdown')
-        await bot.delete_message(chat_id=message.from_user.id, message_id=message.message_id + 1)
-        a = 3  # this is necessary for successful deletion of the processing message at the end
-
-
+            
+        file_name = await download_file_for_id(file_id=message.photo[-1].file_id, extension='png')
+        
+        text = recognition_with_gemini(file_name)
+        
+        os.remove(file_name)
 
     else:
         text = message.text
-        a = 1
-
-    await message.answer('Computing...')  # a temporary message that will be deleted
     
     language = detect_language(text=text)
+    
     if language != 'en':
         text = translate(text=text, target_language='en', source_language=language)
         
@@ -316,14 +300,14 @@ async def wolfram(message: types.Message) -> None:
         media.append(InputMediaPhoto(media=FSInputFile(path=image)))
     await message.answer_media_group(media=media, parse_mode='Markdown')
     
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + a)
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id + 1)
 
     for image in images:
         os.remove(image)
-    add += result
-    sql_message(text, message.from_user.full_name, message.from_user.username, message.from_user.id, add)
+        
+    sql_message(text + f'Result: {result}', message.from_user.full_name, message.from_user.username, message.from_user.id)
 
 
 if __name__ == '__main__':
-    sql_launch()
+    print('Launch')
     dp.run_polling(bot, skip_updates=True)

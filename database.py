@@ -15,8 +15,7 @@ def sql_launch():
         message TEXT,
         name TEXT,
         time TEXT,    
-        id INT,
-        additionally TEXT
+        id INT
         )
         ''')
     
@@ -33,7 +32,6 @@ def sql_launch():
 
     connection.commit()  # Save the changes to the database
     connection.close()  # close the database
-    print('Launch')
 
 
 def sql_user(name: str, username: str, user_id: int):
@@ -49,7 +47,6 @@ def sql_user(name: str, username: str, user_id: int):
         cursor.execute(f"INSERT INTO user(name, username, id, num_of_request, first_request, last_request) VALUES ('{name}', '{username}', {user_id}, 0, '{time}', '{time}')")
     else:
         cursor.execute(f'UPDATE user SET num_of_request = num_of_request+1 WHERE id = {user_id}')
-        cursor.execute(f'UPDATE user SET last_request = {time} WHERE id = {user_id}')
     
     """
     row = cursor.execute(f"SELECT * FROM user WHERE id = {user_id}").fetchall()
@@ -65,21 +62,18 @@ def sql_user(name: str, username: str, user_id: int):
     connection.close()
 
 
-def sql_message(message: str, name: str, username:str, user_id:int, add:str):
+def sql_message(message: str, name: str, username: str, user_id: int) -> None:
     connection = sqlite3.connect('wolfram_database.db')
     cursor = connection.cursor()
 
     sql_user(name, username, user_id)
 
-    if message[0] == '/':
-        add = 'Command.' 
     time = datetime.now().strftime("%d.%m.%Y %H:%M")
 
-    cursor.execute(f"INSERT INTO message(message, name, time, id, additionally) VALUES ('{message}', '{name}', '{time}', {user_id}, '{add}')")
+    cursor.execute("INSERT INTO message(message, name, time, id) VALUES (?, ?, ?, ?)", (message, name, time, user_id))
 
     connection.commit()
     connection.close()
-    print(f'{message}({add}) by {name} at {time}')
 
 
 
@@ -127,3 +121,6 @@ def sql_statistic(file_name, admin):
     plt.clf()
 
     connection.close()
+
+
+sql_launch()
